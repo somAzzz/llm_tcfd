@@ -1,0 +1,92 @@
+# ============ Python ============
+# 字节码与缓存
+__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+*.so
+.Python
+
+# 打包产物
+build/
+dist/
+wheels/
+*.egg-info/
+*.egg
+.installed.cfg
+
+# 类型检查
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+
+# 测试与覆盖率
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# ============ 虚拟环境 ============
+.venv/
+venv/
+env/
+ENV/
+
+# ============ 环境与本地配置 ============
+.env
+.env.*
+.envrc
+.python-version
+.secrets.toml
+
+# ============ 文档配置============
+doc/superpowers/
+
+# ============ IDE / 编辑器 ============
+# VS Code
+.vscode/
+# JetBrains
+.idea/
+*.iml
+# Vim / Emacs
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============ Claude / Agent 配置 ============
+.claude/
+CLAUDE.md
+
+# ============ 项目生成产物 ============
+# 关键词提取 / 词频 / 聚类输出
+output/
+# 临时结果与验证产物
+results/
+# 日志
+*.log
+logs/
+
+# ============ 数据与数据集（不进仓库） ============
+# 原始年报数据（按约定位于 /home/bo/projects/data/）
+# 若在仓库内有 data/ 目录也忽略
+data/
+# 大量临时或大文件
+*.tmp
+*.bak
+*.zip
+*.tar.gz
+
+# ============ 显式保留 ============
+# 反向声明：保留 doc/superpowers/ 下的设计文档与计划
+!doc/superpowers/
+!doc/superpowers/specs/
+!doc/superpowers/specs/*.md
+!doc/superpowers/plans/
+!doc/superpowers/plans/*.md
