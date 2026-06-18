@@ -57,22 +57,22 @@
 
 ```python
 def test_load_sunburst_data_returns_3_dim_tree(tmp_path):
-    """Sunburst: 3 维根 → 聚类 → 关键词 三层树。"""
-    # 构造最小 cluster JSON
+    """Sunburst: 3 维根 → 聚类 → 关键词 三层树。
+
+    真实 cluster JSON 格式: 顶层 list, 每项 {cluster_id, keywords, size, math_label}
+    文件名: {政策维度,市场维度,技术维度}_clusters.json
+    """
+    # 构造最小 cluster JSON (匹配真实 schema)
     clusters_dir = tmp_path / "phase5_category_mapping"
     clusters_dir.mkdir()
-    (clusters_dir / "政策_clusters.json").write_text(json.dumps({
-        "clusters": [
-            {"name": "聚类A", "keywords": ["词1", "词2"]},
-            {"name": "聚类B", "keywords": ["词3"]},
-        ]
-    }, ensure_ascii=False))
-    (clusters_dir / "市场_clusters.json").write_text(json.dumps({
-        "clusters": [{"name": "聚类C", "keywords": ["词4"]}]
-    }, ensure_ascii=False))
-    (clusters_dir / "技术_clusters.json").write_text(json.dumps({
-        "clusters": []
-    }, ensure_ascii=False))
+    (clusters_dir / "政策维度_clusters.json").write_text(json.dumps([
+        {"cluster_id": 0, "math_label": "聚类A", "keywords": ["词1", "词2"], "size": 2},
+        {"cluster_id": 1, "math_label": "聚类B", "keywords": ["词3"], "size": 1},
+    ], ensure_ascii=False))
+    (clusters_dir / "市场维度_clusters.json").write_text(json.dumps([
+        {"cluster_id": 0, "math_label": "聚类C", "keywords": ["词4"], "size": 1},
+    ], ensure_ascii=False))
+    (clusters_dir / "技术维度_clusters.json").write_text(json.dumps([], ensure_ascii=False))
 
     from tcfd_extractor.visualization.data_loader import load_sunburst_data
     result = load_sunburst_data(clusters_dir)
@@ -80,6 +80,7 @@ def test_load_sunburst_data_returns_3_dim_tree(tmp_path):
     assert len(result) == 3  # 3 个 dim 根
     assert result[0]["name"] == "政策"
     assert len(result[0]["children"]) == 2  # 政策有 2 聚类
+    assert result[0]["children"][0]["name"] == "聚类A"  # math_label 字段
     # 技术维度 children 应为空列表 (cluster 空)
     assert result[2]["children"] == []
 ```
@@ -89,7 +90,7 @@ def test_load_sunburst_data_returns_3_dim_tree(tmp_path):
 Run: `uv run pytest tests/test_visualization/test_data_loader.py::test_load_sunburst_data_returns_3_dim_tree -v`
 Expected: `ImportError` 或 `ModuleNotFoundError` (load_sunburst_data 尚未定义)
 
-- [ ] **Step 3: 实现 load_sunburst_data**
+- [ ] **Step 3: 实现 load_sunburst_data (匹配真实 cluster JSON schema)**
 
 在 `src/tcfd_extractor/visualization/data_loader.py` 末尾添加:
 
@@ -97,31 +98,41 @@ Expected: `ImportError` 或 `ModuleNotFoundError` (load_sunburst_data 尚未定�
 def load_sunburst_data(clusters_dir: Path) -> list[dict]:
     """Sunburst 数据: 3 维 → 聚类 → 关键词 三层树。
 
+    真实 cluster JSON 格式: 顶层 list, 每项 {cluster_id, keywords, size, math_label}
+    文件名: {政策维度,市场维度,技术维度}_clusters.json
+
     Args:
-        clusters_dir: 含 {政策,市场,技术}_clusters.json 的目录
+        clusters_dir: 含 {政策维度,市场维度,技术维度}_clusters.json 的目录
 
     Returns:
         list of {name, children: [{name, children: [{name, value}]}]}
     """
     import json as _json
-    dim_names = ["政策", "市场", "技术"]
+    # 文件名用 "维度" 后缀, 显示名不带
+    dim_files = [("政策", "政策维度"), ("市场", "市场维度"), ("技术", "技术维度")]
     result = []
-    for dim in dim_names:
-        path = clusters_dir / f"{dim}_clusters.json"
+    for display_name, file_stem in dim_files:
+        path = clusters_dir / f"{file_stem}_clusters.json"
         if not path.exists():
-            logger.warning("Sunburst: cluster file missing for dim=%s, skipping", dim)
-            result.append({"name": dim, "children": []})
+            logger.warning("Sunburst: cluster file missing for dim=%s (path=%s), skipping",
+                           display_name, path)
+            result.append({"name": display_name, "children": []})
             continue
         with path.open(encoding="utf-8") as f:
             data = _json.load(f)
+        # 真实 schema: 顶层 list, 每项 {cluster_id, math_label, keywords, size}
+        if not isinstance(data, list):
+            logger.warning("Sunburst: dim=%s file is not a list, skipping", display_name)
+            result.append({"name": display_name, "children": []})
+            continue
         children = []
-        for cluster in data.get("clusters", []):
+        for cluster in data:
             kw_children = [{"name": kw, "value": 1} for kw in cluster.get("keywords", [])]
             children.append({
-                "name": cluster["name"],
+                "name": cluster.get("math_label", f"cluster_{cluster.get('cluster_id', '?')}"),
                 "children": kw_children,
             })
-        result.append({"name": dim, "children": children})
+        result.append({"name": display_name, "children": children})
     return result
 ```
 
@@ -352,31 +363,44 @@ git commit -m "feat(data_loader): load_network_data (去重 + symbolSize clamp [
 - [ ] **Step 1: 写失败测试**
 
 ```python
-def test_load_sankey_data_uses_stage_namespace(tmp_path):
-    """Sankey: 节点加 stage{N}_ 前缀, 4 阶段 DAG, stage4 维度合并为 3 节点。"""
-    # 模拟 1 公司 1 年数据
-    summary_csv = tmp_path / "tcfd_keywords_summary.csv"
+def test_load_sankey_data_aggregates_by_year_not_company_year(tmp_path):
+    """Sankey: 节点按 year 聚合 (非 company-year), 避免节点爆炸 (3000+ → ~75)。
+
+    真实文件路径硬编码为 output/tcfd_keywords/tcfd_keywords_summary.csv。
+    阶段 1/2/3 按年聚合 (25 年 × 3 阶段 = 75 节点), 阶段 4 合并为 3 节点。
+    """
+    import os
+    from tcfd_extractor.visualization.data_loader import load_sankey_data
+    # 临时设置 CWD 到 tmp_path 并构造 fake 目录结构
+    os.chdir(tmp_path)
+    (tmp_path / "output" / "tcfd_keywords").mkdir(parents=True)
+    summary_csv = tmp_path / "output" / "tcfd_keywords" / "tcfd_keywords_summary.csv"
     summary_csv.write_text(
         '年报,政策维度,市场维度,技术维度\n'
-        '万科A-2023,"碳达峰,碳中和","绿色信贷","余热余能"\n',
+        '万科A-2023,"碳达峰,碳中和","绿色信贷","余热余能"\n'
+        '万科A-2024,"碳达峰","绿色债券","余热余能,绿氢"\n',
         encoding="utf-8"
     )
-    eval_dir = tmp_path / "evaluate_cooccurrence" / "2023"
-    eval_dir.mkdir(parents=True)
-    rows = [
-        {"keyword_a": "碳达峰", "keyword_b": "绿色信贷", "is_tcfd_related": True, "dimension": "政策"},
-        {"keyword_a": "碳中和", "keyword_b": "绿色信贷", "is_tcfd_related": True, "dimension": "政策"},
-    ]
-    with (eval_dir / "results.jsonl").open("w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    (tmp_path / "output" / "evaluate_cooccurrence" / "2023").mkdir(parents=True)
+    (tmp_path / "output" / "evaluate_cooccurrence" / "2024").mkdir(parents=True)
+    for year in [2023, 2024]:
+        with (tmp_path / "output" / "evaluate_cooccurrence" / str(year) / "results.jsonl").open(
+            "w", encoding="utf-8"
+        ) as f:
+            for _ in range(10):
+                f.write(json.dumps({"is_tcfd_related": True}, ensure_ascii=False) + "\n")
 
-    from tcfd_extractor.visualization.data_loader import load_sankey_data
-    result = load_sankey_data(summary_csv, eval_dir)
+    result = load_sankey_data(eval_dir=tmp_path / "output" / "evaluate_cooccurrence")
 
     # 所有节点都有 stage{N}_ 前缀
     for n in result["nodes"]:
         assert n["name"].startswith("stage"), f"node {n['name']} missing stage prefix"
+    # 阶段 1/2/3 节点 ≤ 3 年 × 3 阶段 = 9 (不是 1001 × 3 = 3003)
+    stage123 = [n for n in result["nodes"]
+                if n["name"].startswith("stage1_")
+                or n["name"].startswith("stage2_")
+                or n["name"].startswith("stage3_")]
+    assert len(stage123) <= 9, f"too many stage1-3 nodes: {len(stage123)}"
     # stage4 节点 ≤ 3 (合并)
     stage4 = [n for n in result["nodes"] if n["name"].startswith("stage4_")]
     assert len(stage4) <= 3
@@ -384,64 +408,79 @@ def test_load_sankey_data_uses_stage_namespace(tmp_path):
 
 - [ ] **Step 2: 跑测试确认失败**
 
-Run: `uv run pytest tests/test_visualization/test_data_loader.py::test_load_sankey_data_uses_stage_namespace -v`
+Run: `uv run pytest tests/test_visualization/test_data_loader.py::test_load_sankey_data_aggregates_by_year_not_company_year -v`
 Expected: `ImportError`
 
-- [ ] **Step 3: 实现 load_sankey_data**
+- [ ] **Step 3: 实现 load_sankey_data (按年聚合, 路径 hardcode)**
 
 ```python
-def load_sankey_data(summary_csv: Path, eval_dir: Path,
+def load_sankey_data(eval_dir: Path,
+                    summary_csv: Path | None = None,
                     chunk_per_report: int = 150) -> dict:
-    """Sankey: 4 阶段流水线, 节点加 stage{N}_ 命名空间。
+    """Sankey: 4 阶段流水线, 阶段 1/2/3 按 year 聚合 (避免节点爆炸)。
+
+    真实文件路径 (相对项目根):
+        summary_csv = output/tcfd_keywords/tcfd_keywords_summary.csv
+        eval_dir    = output/evaluate_cooccurrence/
 
     Args:
-        summary_csv: tcfd_keywords_summary.csv (1001 行, 列: 年报, 政策/市场/技术维度)
         eval_dir: evaluate_cooccurrence 目录 (用于披露计数)
+        summary_csv: 可选覆盖路径, 默认 output/tcfd_keywords/tcfd_keywords_summary.csv
         chunk_per_report: 经验估算 (1 report ≈ 150 chunks, ±50% 误差)
 
     Returns:
-        {"nodes": [{"name": "stage1_report_..."}, ...],
+        {"nodes": [{"name": "stage1_report_2023"}, ...],
          "links": [{"source": "...", "target": "...", "value": N}]}
     """
     import csv as _csv
     import json as _json
     from collections import defaultdict
-    # 读 summary.csv, 按公司×年聚合
-    company_year = {}  # {(company, year): {policy: [...], market: [...], tech: [...]}}
+    if summary_csv is None:
+        summary_csv = Path("output/tcfd_keywords/tcfd_keywords_summary.csv")
+    # 读 summary.csv, 按 year 聚合 (不按 company-year, 避免节点爆炸)
+    year_data = {}  # {year: {report_count, policy_keywords, market_keywords, tech_keywords}}
     with summary_csv.open(encoding="utf-8") as f:
         reader = _csv.DictReader(f)
         for row in reader:
-            # filename: "万科A-2023年年度报告.txt" → (万科A, 2023)
             fn = row["年报"]
-            for sep in ["-", "_"]:
-                if sep in fn:
-                    parts = fn.rsplit(sep, 1)
-                    if len(parts) == 2 and "年" in parts[1]:
-                        company = parts[0]
-                        year_str = parts[1].replace("年年度报告", "").replace(".txt", "")
-                        try:
-                            year = int(year_str)
-                        except ValueError:
-                            continue
-                        key = (company, year)
-                        company_year[key] = {
-                            "policy": [k.strip() for k in row.get("政策维度", "").split(",") if k.strip()],
-                            "market": [k.strip() for k in row.get("市场维度", "").split(",") if k.strip()],
-                            "tech":   [k.strip() for k in row.get("技术维度", "").split(",") if k.strip()],
-                        }
-                        break
-    # 阶段 1/2/3 节点 + 阶段 4 维度聚合
+            # 真实格式: {company_id}-{company_name}-{year}年年度报告.txt
+            # 例: 000629-攀钢钢钒-2008年年度报告.txt
+            # 倒数第 2 个 "-" 后面是年份
+            try:
+                # 用 rsplit 找最后一个 "年" 之前的数字
+                if "年年度报告" not in fn:
+                    continue
+                year_str = fn.split("年年度报告")[0].rsplit("-", 1)[-1]
+                year = int(year_str)
+            except (ValueError, IndexError):
+                continue
+            if year not in year_data:
+                year_data[year] = {
+                    "report_count": 0,
+                    "policy": set(), "market": set(), "tech": set(),
+                }
+            year_data[year]["report_count"] += 1
+            for dim, key in [("政策维度", "policy"), ("市场维度", "market"), ("技术维度", "tech")]:
+                kws = row.get(dim, "")
+                for k in kws.split(","):
+                    k = k.strip()
+                    if k:
+                        year_data[year][key].add(k)
+    # 阶段 1/2/3 按 year 聚合 (75 节点 = 25 年 × 3 阶段)
     nodes = set()
     links = []
-    stage4_value = defaultdict(int)  # dim → total disclosures
-    for (company, year), kws in company_year.items():
-        stage1_name = f"stage1_report_{company}_{year}"
-        stage2_name = f"stage2_chunk_{company}_{year}"
-        stage3_name = f"stage3_disclosure_{company}_{year}"
+    stage4_value = defaultdict(int)  # dim → total
+    for year, data in year_data.items():
+        stage1_name = f"stage1_report_{year}"
+        stage2_name = f"stage2_chunk_{year}"
+        stage3_name = f"stage3_disclosure_{year}"
         nodes.update([stage1_name, stage2_name, stage3_name])
-        # 阶段 1 → 2: 估算 (1 report ≈ 150 chunks)
-        links.append({"source": stage1_name, "target": stage2_name, "value": chunk_per_report})
-        # 阶段 3: 真实披露数 (从 results.jsonl 聚合 is_tcfd_related=true)
+        # 阶段 1 → 2: report_count × chunk_per_report (估算)
+        links.append({
+            "source": stage1_name, "target": stage2_name,
+            "value": data["report_count"] * chunk_per_report,
+        })
+        # 阶段 2 → 3: 真实披露数 (从 results.jsonl 聚合 is_tcfd_related=true)
         jsonl_path = eval_dir / str(year) / "results.jsonl"
         disclosure_count = 0
         if jsonl_path.exists():
@@ -451,17 +490,22 @@ def load_sankey_data(summary_csv: Path, eval_dir: Path,
                     if r.get("is_tcfd_related"):
                         disclosure_count += 1
         else:
-            logger.warning("Sankey: missing results.jsonl for year=%d, using 0 disclosures", year)
-        links.append({"source": stage2_name, "target": stage3_name, "value": disclosure_count})
+            logger.warning("Sankey: missing results.jsonl for year=%d, using 0", year)
+        links.append({
+            "source": stage2_name, "target": stage3_name, "value": disclosure_count,
+        })
         # 阶段 3 → 4: 按 dim 拆分
-        for dim, kw_list in kws.items():
-            if kw_list:  # 非空才连边
-                stage4_name = f"stage4_dim_{dim.replace('政策', 'policy').replace('市场', 'market').replace('技术', 'tech')}"
-                value = len(kw_list)
-                links.append({"source": stage3_name, "target": stage4_name, "value": value})
+        for dim_zh, dim_en in [("policy", "policy"), ("market", "market"), ("tech", "tech")]:
+            kw_set = data[dim_en]
+            if kw_set:
+                stage4_name = f"stage4_dim_{dim_en}"
+                value = len(kw_set)
+                links.append({
+                    "source": stage3_name, "target": stage4_name, "value": value,
+                })
                 stage4_value[stage4_name] += value
-    # 添加 stage4 节点 (去重)
-    for stage4_name, val in stage4_value.items():
+    # 添加 stage4 节点
+    for stage4_name in stage4_value:
         nodes.add(stage4_name)
     return {
         "nodes": [{"name": n} for n in sorted(nodes)],
@@ -594,7 +638,8 @@ from tcfd_extractor.visualization.echarts import (
 def test_tcfd_theme_config_has_required_keys():
     """主题配置必备字段存在。"""
     required = ["colors", "font", "text_style", "tooltip_style",
-                "global_roam", "animation", "sankey_label_formatter"]
+                "global_roam", "animation", "animation_duration",
+                "sankey_label_formatter"]
     for key in required:
         assert key in TCFD_THEME_CONFIG, f"missing key: {key}"
 
@@ -783,6 +828,9 @@ def test_build_network_returns_force_graph_with_unique_ids():
     assert len(node_ids) == len(set(node_ids))
     for n in opt["series"][0]["nodes"]:
         assert 10 <= n["symbolSize"] <= 60
+    # 边界断言: 词C 频次最高, symbolSize 应被 clamp 到上限 60
+    nodes_by_id = {n["id"]: n for n in opt["series"][0]["nodes"]}
+    assert nodes_by_id["词C"]["symbolSize"] == 60
 ```
 
 - [ ] **Step 2: 跑测试确认失败**
@@ -936,44 +984,67 @@ Expected: 找到 import 块和 3 处 figure 调用
 在 `html_assembler.py` 顶部替换 `from .chart_builders import ...` 为:
 
 ```python
-from tcfd_extractor.visualization.echarts import (
+from .echarts import (
     build_sunburst, build_streamgraph, build_network, build_sankey,
 )
-from tcfd_extractor.visualization.data_loader import (
-    load_sunburst_data, load_streamgraph_data, load_network_data, load_sankey_data,
+from .data_loader import (
+    load_sunburst_data, load_streamgraph_data, load_network_data,
 )
+# load_sankey_data 在本模块内调用 (路径 hardcode, 不传参)
 ```
 
-- [ ] **Step 3: 在 assemble_html 中替换 3 处 figure 调用为 4 图 option**
+(注意: 使用 **相对** import `from .echarts` 保持与现有 `from .data_loader` 一致)
 
-定位原 3 处 `build_*_chart(...)` 调用, 替换为 (示例):
+- [ ] **Step 3: 替换 3 处 figure 调用为 4 图 option (含死代码清理)**
+
+定位原 3 处 `build_*_chart(...)` + 3 处 `compute_*` 调用, 全部替换:
 
 ```python
-# 替换原 donut chart:
+# 替换原 donut + trend + bar + 3 个 compute_* 调用:
+clusters_dir = Path("output/tcfd_keywords/phase5_category_mapping")
+eval_dir = results_root  # results_root 参数就是 evaluate_cooccurrence 目录
+
 sunburst_opt = build_sunburst(load_sunburst_data(clusters_dir), {})
-# 替换原 trend chart:
 streamgraph_opt = build_streamgraph(
     load_streamgraph_data(eval_dir, years=range(2000, 2025)), {}
 )
-# 替换原 bar chart:
 network_opt = build_network(
     load_network_data(eval_dir, years=[2022, 2023, 2024]), {}
 )
-# 新增 sankey:
-sankey_opt = build_sankey(
-    load_sankey_data(summary_csv, eval_dir), {}
-)
-charts = {
-    "sunburst": sunburst_opt,
-    "streamgraph": streamgraph_opt,
-    "network": network_opt,
-    "sankey": sankey_opt,
-}
+# Sankey 路径 hardcode (load_sankey_data 内部默认读 output/tcfd_keywords/tcfd_keywords_summary.csv)
+sankey_opt = build_sankey(load_sankey_data(eval_dir=eval_dir), {})
+
+# 4 个 option 序列化为 JSON 字符串 (template 用 {{ xxx_json|safe }} 接收)
+import json as _json
+sunburst_json = _json.dumps(sunburst_opt, ensure_ascii=False)
+streamgraph_json = _json.dumps(streamgraph_opt, ensure_ascii=False)
+network_json = _json.dumps(network_opt, ensure_ascii=False)
+sankey_json = _json.dumps(sankey_opt, ensure_ascii=False)
 ```
 
-- [ ] **Step 4: 把 charts dict 传入 template 渲染**
+**死代码清理** (必须执行, 否则 import 警告):
+- 删除 `from .data_loader import load_all_results, compute_kpis, compute_dimension_distribution, compute_yearly_counts, compute_top_keyword_pairs, years_with_data` (KPI 不再用)
+- 删除 `results = load_all_results(...)`, `kpis_raw = compute_kpis(...)`, `years = years_with_data(...)`, `distribution = compute_dimension_distribution(...)`, `yearly = compute_yearly_counts(...)`, `pairs = compute_top_keyword_pairs(...)` 共 6 行
+- 保留 `results_root` 用于 `eval_dir`, 保留 `refactor_bar_b64`, `module_graph_svg`, `refactor_stats`, `build_date` 参数
 
-定位 `template.render(...)` 或 `assemble_html(...)` 末尾, 改为传入 `charts=charts`。
+- [ ] **Step 4: 把 4 个 JSON 字符串传入 template 渲染**
+
+定位 `HTML_TEMPLATE.render(...)` 末尾, 改为:
+
+```python
+return HTML_TEMPLATE.render(
+    sunburst_json=sunburst_json,
+    streamgraph_json=streamgraph_json,
+    network_json=network_json,
+    sankey_json=sankey_json,
+    refactor_b64=refactor_bar_b64,
+    module_graph_svg=module_graph_svg,
+    refactor_stats=refactor_stats or {},
+    build_date=build_date or date.today().isoformat(),
+)
+```
+
+(删除 `kpis=, donut_json=, trend_json=, bar_json=`)
 
 - [ ] **Step 5: 跑现有 html_assembler 测试**
 
@@ -1002,7 +1073,9 @@ Run: `grep -n "plotly\|cdn\|<div\|<script" src/tcfd_extractor/visualization/temp
 
 - [ ] **Step 3: 替换 3 个 chart div 为 4 个 ECharts div + per-chart 渲染块**
 
-原 3 个 `<div class="plotly">` 块, 替换为:
+**先删除 3 个 Plotly chart div** (line 165-221 区域): `<div id="donut-data">`, `<div id="trend-data">`, `<div id="bar-data">` 全部移除。
+
+**再添加 4 个 ECharts chart div**:
 
 ```html
 <!-- Sunburst -->
@@ -1013,11 +1086,7 @@ try {
         .setOption({{ sunburst_json|safe }});
 } catch (e) {
     var el = document.getElementById('echarts-sunburst');
-    el.style.background = '#f0f0f0';
-    el.style.color = '#666';
-    el.style.textAlign = 'center';
-    el.style.lineHeight = '400px';
-    el.textContent = '图表渲染失败, 请检查数据格式';
+    el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败, 请检查数据格式</div>';
     console.error('Sunburst render failed:', e);
 }
 </script>
@@ -1025,21 +1094,23 @@ try {
 <!-- Streamgraph -->
 <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:400px;"></div>
 <script>
-try { echarts.init(document.getElementById('echarts-streamgraph')).setOption({{ streamgraph_json|safe }}); } catch (e) { /* 同样 fallback */ }
+try { echarts.init(document.getElementById('echarts-streamgraph')).setOption({{ streamgraph_json|safe }}); } catch (e) { var el = document.getElementById('echarts-streamgraph'); el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Streamgraph:', e); }
 </script>
 
 <!-- Network -->
 <div id="echarts-network" class="echarts-chart" style="width:100%; height:500px;"></div>
 <script>
-try { echarts.init(document.getElementById('echarts-network')).setOption({{ network_json|safe }}); } catch (e) { /* 同样 fallback */ }
+try { echarts.init(document.getElementById('echarts-network')).setOption({{ network_json|safe }}); } catch (e) { var el = document.getElementById('echarts-network'); el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:500px;">图表渲染失败</div>'; console.error('Network:', e); }
 </script>
 
 <!-- Sankey -->
 <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:400px;"></div>
 <script>
-try { echarts.init(document.getElementById('echarts-sankey')).setOption({{ sankey_json|safe }}); } catch (e) { /* 同样 fallback */ }
+try { echarts.init(document.getElementById('echarts-sankey')).setOption({{ sankey_json|safe }}); } catch (e) { var el = document.getElementById('echarts-sankey'); el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Sankey:', e); }
 </script>
 ```
+
+(注意: fallback 用 `el.innerHTML = ...` 而非 `el.textContent`, 避免残留 canvas)
 
 - [ ] **Step 4: 跑现有 html_assembler 测试 (现在应该过)**
 
@@ -1153,15 +1224,27 @@ git add pyproject.toml uv.lock
 git commit -m "chore: 移除 plotly 依赖, 删 chart_builders.py + test_chart_builders.py"
 ```
 
-### Task 4.4: 更新 README.md HR 报告章节
+### Task 4.4: 修复 README.md 的 tcfd-hr-report 引用漂移
 
-- [ ] **Step 1: 找到 "## 可视化报告" 章节 (line 211)**
+(原任务: 更新 HR 章节加 ECharts 说明; 现扩展: 同时修 3 处 `tcfd-hr-report` 残留, 保持与已部署 URL 一致)
 
-Run: `grep -n "## 可视化报告\|## 5. 报告生成" README.md`
+- [ ] **Step 1: 定位 3 处 tcfd-hr-report 引用**
 
-- [ ] **Step 2: 在 HR 报告介绍段后添加 ECharts 说明**
+Run: `grep -n "tcfd-hr-report\|<user>" README.md`
+Expected: 命中 3 处 (line 253, 256, 364) + 之前已存在的引用
 
-在 `## 可视化报告` 章节内, 在 `\visualization\` 包说明段后, 添加:
+- [ ] **Step 2: 全局替换**
+
+Run:
+```bash
+sed -i 's|tcfd-hr-report|tcfd-report|g; s|<user>|somAzzz|g' README.md
+grep -n "tcfd-hr-report\|<user>" README.md
+```
+Expected: grep 返回空
+
+- [ ] **Step 3: 在 HR 报告章节加 ECharts 说明 (扩展原 Task 4.4)**
+
+在 `## 可视化报告` 章节, 在原 `build_hr_report.py` 代码块**之前**, 添加:
 
 ```markdown
 ### 高级图表 (ECharts, Stage 1)
@@ -1174,16 +1257,16 @@ Run: `grep -n "## 可视化报告\|## 5. 报告生成" README.md`
 底层用 ECharts 5.5 CDN, 单文件 HTML 仍可 (1.5-2MB)。
 ```
 
-- [ ] **Step 3: 跑 grep 确认无残留 plotly 引用**
+- [ ] **Step 4: 跑 grep 确认无残留 plotly 引用**
 
 Run: `grep -i "plotly" README.md`
-Expected: 无输出 (若有, 替换为 "ECharts")
+Expected: 无输出
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add README.md
-git commit -m "docs(README): HR 报告章节添加 ECharts 4 高级图说明"
+git commit -m "docs(README): HR 章节加 ECharts 4 高级图说明 + 修复 tcfd-hr-report 引用漂移 (line 253/256/364)"
 ```
 
 ### Task 4.5: 更新 scripts/build_hr_report.py 注释
@@ -1313,16 +1396,23 @@ git -C output/hr_report -c user.email="noreply@github.com" -c user.name="somAzzz
 Run:
 ```bash
 cd /home/bo/projects/python/frequency_analyzer
-gh repo edit somAzzz/tcfd-report --delete-branch  # 清理旧 default branch
-git -C output/hr_report remote add upstream https://github.com/somAzzz/tcfd-report.git
+git -C output/hr_report remote add upstream https://github.com/somAzzz/tcfd-report.git 2>/dev/null || git -C output/hr_report remote set-url upstream https://github.com/somAzzz/tcfd-report.git
 git -C output/hr_report push upstream main --force
 ```
-Expected: 推送成功
+Expected: `+ abc1234...def5678 main -> main (forced update)`
 
-- [ ] **Step 4: 验证 Pages 配置仍有效 (不重新启用)**
+(注: 不需要 `gh repo edit --delete-branch`, 该 flag 不存在。 `--force` push 直接覆盖 v1 的 commit `5e6646e`)
 
-Run: `gh api repos/somAzzz/tcfd-report/pages --jq '"html_url=" + .html_url, "status=" + (.status // "null")'`
-Expected: `html_url=https://somazzz.github.io/tcfd-report/`, `status=built`
+- [ ] **Step 4: 验证 Pages 配置 (source branch 是 main, path 是 /)**
+
+Run: `gh api repos/somAzzz/tcfd-report/pages --jq '.html_url, "branch=" + .source.branch, "path=" + .source.path, "status=" + .status'`
+Expected:
+- `https://somazzz.github.io/tcfd-report/`
+- `branch=main`
+- `path=/`
+- `status=built` (或 `building`, 部署后会是 `built`)
+
+若 `branch != main` 或 `path != /`, 用 `gh api -X PATCH repos/somAzzz/tcfd-report/pages -f 'source[branch]=main' -f 'source[path]=/'` 修正。
 
 - [ ] **Step 5: curl 验证线上**
 
