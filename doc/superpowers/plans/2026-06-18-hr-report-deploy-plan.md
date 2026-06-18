@@ -553,7 +553,7 @@ echo "=== 4. 推送完成 ==="
 gh api repos/somAzzz/tcfd-report/contents/index.html -q '.name' | grep -q index.html && echo "✅ index.html 已推送" || echo "❌"
 
 echo "=== 5. Pages 启用 ==="
-gh api repos/somAzzz/tcfd-report/pages -q '.url' | grep -q "tcfd-report" && echo "✅ Pages URL 正确" || echo "❌"
+gh api repos/somAzzz/tcfd-report/pages -q '.html_url' | grep -q "tcfd-report" && echo "✅ Pages URL 正确" || echo "❌"
 
 echo "=== 6. 站点可达 ==="
 code=$(curl -I -s -o /dev/null -w "%{http_code}" https://somAzzz.github.io/tcfd-report/)
