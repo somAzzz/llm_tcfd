@@ -1,185 +1,155 @@
-#!/usr/bin/env python3
-"""批量评估共现上下文
+"""批量评估共现上下文(消除 subprocess,纯函数式)
 
-按年份分别评估 cooccurrence_context 目录下的内容
+按年份分别评估 cooccurrence_context 目录下的内容。
 
 Examples:
     # 评估所有年份
-    python scripts/batch_evaluate_cooccurrence.py
+    python -m tcfd_extractor.evaluation.batch_evaluate_cooccurrence
 
-    # 指定输入输出目录
-    python scripts/batch_evaluate_cooccurrence.py \\
-        --input-dir output/frequency/cooccurrence_context \\
-        --output-dir output/evaluate_cooccurrence
+    # 指定年份
+    python -m tcfd_extractor.evaluation.batch_evaluate_cooccurrence \\
+        --year 2020
 """
-
 import argparse
-import json
-import subprocess
+import logging
 import sys
-from collections import Counter
 from pathlib import Path
 
-
-def print_results_stats(results_file: Path) -> None:
-    """Print statistics from results.jsonl file."""
-    if not results_file.exists():
-        print(f"  [统计] 结果文件不存在: {results_file}")
-        return
-
-    total = 0
-    tcfd_related = 0
-    keyword_a_counts = Counter()
-    keyword_b_counts = Counter()
-    file_counts = Counter()
-
-    with open(results_file, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            total += 1
-            if record.get("is_tcfd_related"):
-                tcfd_related += 1
-
-            keyword_a = record.get("keyword_a", "")
-            keyword_b = record.get("keyword_b", "")
-            file_field = record.get("file", "")
-
-            if keyword_a:
-                keyword_a_counts[keyword_a] += 1
-            if keyword_b:
-                keyword_b_counts[keyword_b] += 1
-            if file_field:
-                file_counts[file_field] += 1
-
-    print(f"\n  [统计] {results_file.parent.name} 年度结果:")
-    print(f"  {'=' * 40}")
-    print(f"  总记录数: {total}")
-    print(f"  TCFD相关: {tcfd_related} ({tcfd_related/total*100:.1f}%)" if total > 0 else "  TCFD相关: 0")
-    print(f"  涉及公司数: {len(file_counts)}")
-    print(f"  不同关键词A数: {len(keyword_a_counts)}")
-    print(f"  不同关键词B数: {len(keyword_b_counts)}")
-
-    if keyword_a_counts:
-        top_a = keyword_a_counts.most_common(5)
-        print(f"  Top5 关键词A: {', '.join([f'{k}({v})' for k, v in top_a])}")
-
-    print()
+from ..config import BatchSettings, LLMSettings, batch_settings, llm_settings
+from .batch import BatchEvaluator
+from .evaluator import CooccurrenceEvaluator
+from .exceptions import LLMEvaluationError
+from .summary import compute_statistics, generate_summary
 
 
-def main():
-    parser = argparse.ArgumentParser(description="批量评估共现上下文（按年份）")
+logger = logging.getLogger(__name__)
+
+
+def main() -> int:
+    """CLI 主入口。返回退出码。"""
+    try:
+        return _main_impl()
+    except Exception as e:
+        logger.exception("CLI 顶层异常: %s", e)
+        return 1
+
+
+def _main_impl() -> int:
+    parser = argparse.ArgumentParser(description="批量评估共现上下文(按年份)")
     parser.add_argument(
-        "--input-dir",
-        type=str,
+        "--input-dir", type=str,
         default="output/frequency/cooccurrence_context",
-        help="共现上下文MD文件根目录",
+        help="共现上下文 MD 文件根目录",
     )
     parser.add_argument(
-        "--output-dir",
-        type=str,
+        "--output-dir", type=str,
         default="output/evaluate_cooccurrence",
         help="评估结果输出根目录",
     )
     parser.add_argument(
-        "--api-url",
-        type=str,
-        default="http://127.0.0.1:30000/v1",
-        help="SGLang API端点",
+        "--year", type=str,
+        default=None,
+        help="指定单个年份(默认遍历所有年份)",
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default="Qwen/Qwen3.5-35B-A3B",
+        "--api-url", type=str,
+        default=llm_settings.base_url,
+        help="SGLang API 端点",
+    )
+    parser.add_argument(
+        "--model", type=str,
+        default=llm_settings.model_name,
         help="模型名称",
     )
     parser.add_argument(
-        "--workers",
-        type=int,
-        default=8,
-        help="并发评估数，默认8",
+        "--workers", type=int,
+        default=batch_settings.workers,
+        help="并发评估数(默认用全局 config)",
     )
     args = parser.parse_args()
+
+    # 显式 logging 配置
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
 
     input_root = Path(args.input_dir)
     output_root = Path(args.output_dir)
 
     if not input_root.exists():
-        print(f"错误: 输入目录不存在: {input_root}")
-        sys.exit(1)
+        logger.error("输入目录不存在: %s", input_root)
+        return 1
 
     # 获取所有年份子目录
     year_dirs = sorted(
         [d for d in input_root.iterdir() if d.is_dir() and d.name.isdigit()]
     )
-
     if not year_dirs:
-        print(f"警告: 在 {input_root} 中未找到年份子目录")
-        # 退化为直接处理根目录
+        logger.warning("在 %s 中未找到年份子目录,处理根目录", input_root)
         year_dirs = [input_root]
-        input_root_should_be_year = False
-    else:
-        input_root_should_be_year = True
 
-    print(f"发现 {len(year_dirs)} 个年份目录\n")
+    if args.year:
+        year_dirs = [d for d in year_dirs if d.name == args.year]
+        if not year_dirs:
+            logger.error("未找到指定年份: %s", args.year)
+            return 1
 
+    logger.info("发现 %d 个年份目录", len(year_dirs))
+
+    # 构造 settings(CLI 参数覆盖)
+    settings = LLMSettings(
+        base_url=args.api_url,
+        model_name=args.model,
+    )
+    batch_cfg = BatchSettings(
+        workers=args.workers,
+        max_retries=batch_settings.max_retries,
+        retry_delay=batch_settings.retry_delay,
+        reason_max_length=batch_settings.reason_max_length,
+    )
+    evaluator = CooccurrenceEvaluator(settings=settings)
+
+    # 每个年份独立处理(避免 BatchEvaluator 跨年状态泄漏)
+    failed_years = []
     for year_dir in year_dirs:
-        year = (
-            year_dir.name if input_root_should_be_year else input_root.name or "unknown"
-        )
-        print(f"{'=' * 50}")
-        print(f"处理年份: {year}")
-        print(f"{'=' * 50}")
+        year = year_dir.name
+        logger.info("=" * 50)
+        logger.info("处理年份: %s", year)
+        logger.info("=" * 50)
 
-        # 构建输出路径
         year_output_dir = output_root / year
         year_output_dir.mkdir(parents=True, exist_ok=True)
-
         results_file = year_output_dir / "results.jsonl"
         summary_file = year_output_dir / "summary.md"
 
-        # 确定输入目录
-        input_dir = year_dir if input_root_should_be_year else input_root
+        # 每年重新实例化 BatchEvaluator(spec 风险缓解)
+        batch_evaluator = BatchEvaluator(evaluator, settings=batch_cfg)
 
-        # 构建命令
-        cmd = [
-            sys.executable,
-            "-m",
-            "tcfd_extractor.evaluation.evaluate_cooccurrence",
-            "--input-dir",
-            str(input_dir),
-            "--output",
-            str(results_file),
-            "--summary",
-            str(summary_file),
-            "--api-url",
-            args.api_url,
-            "--model",
-            args.model,
-            "--workers",
-            str(args.workers),
-        ]
+        try:
+            stats = batch_evaluator.evaluate_all(year_dir, results_file)
+            logger.info(
+                "%s: %d 片段, %d TCFD 相关, %d 解析错误, %d 评估错误",
+                year, stats["total"], stats["tcfd_count"],
+                stats["parse_errors"], stats["eval_errors"]
+            )
+        except LLMEvaluationError as e:
+            logger.exception("年份 %s 评估失败: %s", year, e)
+            failed_years.append(year)
+            continue
 
-        print(f"输入: {input_dir}")
-        print(f"输出: {results_file}")
-        print(f"命令: {' '.join(cmd)}\n")
+        try:
+            statistics = compute_statistics(results_file)
+            generate_summary(statistics, summary_file, settings=settings)
+        except LLMEvaluationError as e:
+            logger.exception("年份 %s 总结失败: %s", year, e)
+            failed_years.append(year)
 
-        # 执行评估
-        result = subprocess.run(cmd, check=False)
-
-        if result.returncode != 0:
-            print(f"错误: 年份 {year} 评估失败，退出码: {result.returncode}")
-            # 继续处理其他年份
-        else:
-            print_results_stats(results_file)
-            print(f"完成: {year}\n")
+    if failed_years:
+        logger.error("失败的年份: %s", failed_years)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
