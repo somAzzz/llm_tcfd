@@ -6,6 +6,10 @@ import pytest
 from tcfd_extractor.visualization.echarts import (
     TCFD_THEME_CONFIG,
     _get_base_option,
+    build_sunburst,
+    # build_streamgraph,  # Task 2.3
+    # build_network,      # Task 2.4
+    # build_sankey,       # Task 2.5
 )
 
 
@@ -40,3 +44,18 @@ def test_get_base_option_returns_skeleton():
     assert "color" in opt
     assert "textStyle" in opt
     assert opt["textStyle"]["fontFamily"] == "Inter"
+
+
+def test_build_sunburst_returns_echarts_option_skeleton():
+    """Sunburst builder 输出 ECharts sunburst series。"""
+    data = [
+        {"name": "政策", "children": [
+            {"name": "聚类A", "children": [{"name": "词1", "value": 1}]}
+        ]},
+        {"name": "市场", "children": []},
+        {"name": "技术", "children": []},
+    ]
+    opt = build_sunburst(data, TCFD_THEME_CONFIG)
+    assert opt["series"][0]["type"] == "sunburst"
+    assert len(opt["series"][0]["data"]) == 3  # 3 个 dim 根
+    assert opt["series"][0]["data"][0]["children"][0]["name"] == "聚类A"

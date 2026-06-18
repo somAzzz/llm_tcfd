@@ -56,3 +56,21 @@ def _get_base_option(title: str, subtitle: str | None = None) -> dict:
 
 
 # builder 函数将在 Task 2.2-2.5 添加
+
+
+def build_sunburst(data: list[dict], theme: dict) -> dict:
+    """Sunburst: 3 维 → 聚类 → 关键词 三层树。"""
+    opt = _get_base_option("TCFD 维度聚类分布", "点击节点下钻")
+    opt["series"] = [{
+        "type": "sunburst",
+        "data": data,
+        "radius": ["10%", "90%"],
+        "label": {"rotate": "tangential", "fontSize": 11,
+                  "color": theme["text_style"]["color"]},
+        "emphasis": {"focus": "ancestor"},
+        "nodeClick": "zoomToNode",
+        "sort": None,
+        "animation": theme["animation"],
+        "animationDuration": theme["animation_duration"],
+    }]
+    return opt
