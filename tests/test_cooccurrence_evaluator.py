@@ -9,6 +9,7 @@ from tcfd_extractor.evaluation.cooccurrence_evaluator import (
     CooccurrenceContext,
     EvaluationResult,
     FileParseResult,
+    TCFDValidationResult,
     parse_cooccurrence_md,
     CooccurrenceEvaluator,
     BatchEvaluator,
@@ -166,7 +167,7 @@ class TestParseCooccurrenceMd:
         assert result.year == 2020
 
     def test_parse_invalid_header(self, tmp_path):
-        """测试解析无效文件头"""
+        """测试解析无效文件头 - 回退到文件名 stem，year=0"""
         content = """# 无效格式
 
 内容...
@@ -174,16 +175,22 @@ class TestParseCooccurrenceMd:
         md_file = tmp_path / "test.md"
         md_file.write_text(content, encoding="utf-8")
 
-        with pytest.raises(ValueError, match="无法解析文件头"):
-            parse_cooccurrence_md(md_file)
+        # 头格式无效时不应抛出异常，而是回退到文件名解析
+        result = parse_cooccurrence_md(md_file)
+        assert result.company == "test"  # 从文件名 stem 回退
+        assert result.year == 0  # 路径中无年份，回退为 0
+        assert result.contexts == []  # 无有效共现上下文
 
     def test_parse_empty_file(self, tmp_path):
-        """测试解析空文件"""
+        """测试解析空文件 - 空内容回退到 stem, year=0"""
         md_file = tmp_path / "empty.md"
         md_file.write_text("", encoding="utf-8")
 
-        with pytest.raises(ValueError, match="无法解析文件头"):
-            parse_cooccurrence_md(md_file)
+        # 空文件但文件名有效，回退解析成功
+        result = parse_cooccurrence_md(md_file)
+        assert result.company == "empty"  # 从文件名 stem 回退
+        assert result.year == 0  # 路径中无年份，回退为 0
+        assert result.contexts == []  # 空内容无共现上下文
 
     def test_parse_real_file(self):
         """测试解析真实文件"""
@@ -200,15 +207,20 @@ class TestCooccurrenceEvaluator:
     """LLM评估器测试"""
 
     def test_evaluate_success(self):
-        """测试成功评估"""
+        """测试成功评估 - 使用 beta.chat.completions.parse 返回 Pydantic 对象"""
+        # 构造真实的 TCFDValidationResult 对象，模拟 .parse() 的返回
+        parsed_result = TCFDValidationResult(
+            is_tcfd_related=True,
+            dimension="政策",
+            reason="符合TCFD标准",
+        )
         mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(message=MagicMock(content='{"is_tcfd_related": true, "reason": "符合TCFD标准"}'))
-        ]
+        mock_response.choices = [MagicMock(message=MagicMock(parsed=parsed_result))]
 
         with patch("tcfd_extractor.evaluation.cooccurrence_evaluator.OpenAI") as mock_openai:
             mock_client = MagicMock()
-            mock_client.chat.completions.create.return_value = mock_response
+            # 关键：使用 beta.chat.completions.parse 而非 chat.completions.create
+            mock_client.beta.chat.completions.parse.return_value = mock_response
             mock_openai.return_value = mock_client
 
             evaluator = CooccurrenceEvaluator()
@@ -226,15 +238,19 @@ class TestCooccurrenceEvaluator:
             assert result.keyword_a == "碳交易"
 
     def test_evaluate_with_markdown_code_block(self):
-        """测试解析带markdown代码块的响应"""
+        """测试解析带markdown代码块的响应 - beta.parse 直接返回 Pydantic 对象，跳过手动解析"""
+        # 在使用 .parse() 时，OpenAI 客户端会自行处理 markdown 代码块并直接返回结构化结果
+        parsed_result = TCFDValidationResult(
+            is_tcfd_related=False,
+            dimension="无",
+            reason="不相关",
+        )
         mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(message=MagicMock(content='```json\n{"is_tcfd_related": false, "reason": "不相关"}\n```'))
-        ]
+        mock_response.choices = [MagicMock(message=MagicMock(parsed=parsed_result))]
 
         with patch("tcfd_extractor.evaluation.cooccurrence_evaluator.OpenAI") as mock_openai:
             mock_client = MagicMock()
-            mock_client.chat.completions.create.return_value = mock_response
+            mock_client.beta.chat.completions.parse.return_value = mock_response
             mock_openai.return_value = mock_client
 
             evaluator = CooccurrenceEvaluator()
