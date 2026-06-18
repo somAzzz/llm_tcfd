@@ -217,7 +217,7 @@ class TestCooccurrenceEvaluator:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(parsed=parsed_result))]
 
-        with patch("tcfd_extractor.evaluation.cooccurrence_evaluator.OpenAI") as mock_openai:
+        with patch("tcfd_extractor.evaluation.evaluator.OpenAI") as mock_openai:
             mock_client = MagicMock()
             # 关键：使用 beta.chat.completions.parse 而非 chat.completions.create
             mock_client.beta.chat.completions.parse.return_value = mock_response
@@ -248,7 +248,7 @@ class TestCooccurrenceEvaluator:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock(message=MagicMock(parsed=parsed_result))]
 
-        with patch("tcfd_extractor.evaluation.cooccurrence_evaluator.OpenAI") as mock_openai:
+        with patch("tcfd_extractor.evaluation.evaluator.OpenAI") as mock_openai:
             mock_client = MagicMock()
             mock_client.beta.chat.completions.parse.return_value = mock_response
             mock_openai.return_value = mock_client
@@ -346,7 +346,7 @@ class TestGenerateSummary:
             MagicMock(message=MagicMock(content="# 总结报告\n\n准确率: 50%"))
         ]
 
-        with patch("tcfd_extractor.evaluation.cooccurrence_evaluator.OpenAI") as mock_openai:
+        with patch("tcfd_extractor.evaluation.summary.OpenAI") as mock_openai:
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             mock_openai.return_value = mock_client
@@ -370,7 +370,7 @@ class TestGenerateSummary:
             MagicMock(message=MagicMock(content="# 总结报告\n\n无数据"))
         ]
 
-        with patch("tcfd_extractor.evaluation.cooccurrence_evaluator.OpenAI") as mock_openai:
+        with patch("tcfd_extractor.evaluation.summary.OpenAI") as mock_openai:
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             mock_openai.return_value = mock_client
