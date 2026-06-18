@@ -146,7 +146,6 @@ src/tcfd_extractor/
     ├── anonymize.py                     # 单向 SHA-256 公司名脱敏
     ├── translations.py                  # 中→英关键词映射(~140 条)
     ├── data_loader.py                   # 25 年 JSONL 加载 + 聚合
-    ├── chart_builders.py                # 3 个 Plotly 图表(donut/trend/bar)
     ├── static_charts.py                 # matplotlib 重构对比图 + 模块依赖 SVG
     ├── module_graph.py                  # AST 自动发现模块依赖
     ├── html_assembler.py                # 编排器:数据 → 图表 → 模板
@@ -196,7 +195,6 @@ src/tcfd_extractor/
 - `anonymize.py` —— 单向 SHA-256 公司名脱敏(`Company #001` 风格,无反向表)
 - `translations.py` —— 中→英关键词映射表(~140 条),UI 全英文,数据保留中文
 - `data_loader.py` —— JSONL 批量加载 + KPI/维度/年份/Top 共现词对聚合
-- `chart_builders.py` —— 3 个 Plotly 图表(TCFD 维度 donut、年度趋势双线、Top 关键词对双语 tooltip)
 - `static_charts.py` —— matplotlib 重构前后对比 + 模块依赖图(AST 自动发现)
 - `module_graph.py` —— AST 解析本地模块 import 关系
 - `html_assembler.py` —— 编排器:数据 → 图表 → Jinja2 模板
@@ -215,6 +213,15 @@ src/tcfd_extractor/
 `visualization` 包内置一个完整的"研究项目 → 作品集 HTML"流水线,可用于对外展示项目成果(如求职时向 HR / 面试官展示)。
 
 ### 一键生成
+
+### 高级图表 (ECharts, Stage 1)
+
+- **Sunburst** — 3 维 (政策/市场/技术) 聚类层级下钻
+- **Streamgraph** — 2000-2024 年 3 维披露演变, 可拖动时间缩放
+- **Force-directed Network** — 近 3 年 (2022-2024) 关键词共现, 节点可拖拽
+- **Sankey** — NLP 流水线数据提纯 (10,814 报告 → 维度归类)
+
+底层用 ECharts 5.5 CDN, 单文件 HTML 仍可 (1.5-2MB)。
 
 ```bash
 # 生成报告(默认 GitHub Pages 模式,CDN 加载 JS,~1.5 MB)
@@ -250,10 +257,10 @@ output/hr_report/
 
 ### GitHub Pages 部署
 
-1. 创建新公开仓库 `tcfd-hr-report`(与主项目隔离)
+1. 创建新公开仓库 `tcfd-report`(与主项目隔离)
 2. 推送 `index.html` + `README.md` + `.nojekyll`
 3. Settings → Pages → Branch: `main` → Save
-4. 获得 `https://<user>.github.io/tcfd-hr-report/` 公开链接
+4. 获得 `https://somAzzz.github.io/tcfd-report/` 公开链接
 
 ## 数据假设
 
@@ -295,7 +302,6 @@ uv run pytest --cov=src/tcfd_extractor
   - `test_anonymize.py` —— 脱敏(14)
   - `test_translations.py` —— 中→英映射 + 覆盖率(12)
   - `test_data_loader.py` —— JSONL 加载 + 聚合(14)
-  - `test_chart_builders.py` —— Plotly 图表(9)
   - `test_static_charts.py` —— matplotlib + SVG(5)
   - `test_module_graph.py` —— AST 依赖发现(5)
   - `test_html_assembler.py` —— 端到端模板渲染(7,部分需 PYTHONPATH=src)
@@ -341,7 +347,7 @@ uv run pytest --cov=src/tcfd_extractor
 
 | 项目 | 数值 |
 |---|---|
-| 新增模块 | 8 个(`anonymize` / `translations` / `data_loader` / `chart_builders` / `static_charts` / `module_graph` / `html_assembler` / `template`) |
+| 新增模块 | 8 个(`anonymize` / `translations` / `data_loader` / `static_charts` / `module_graph` / `html_assembler` / `template`) |
 | 新增脚本 | 2 个(`build_hr_report.py` 编排器,`check_leakage.py` 预推送泄漏检查) |
 | 新增测试 | 65(7 个测试文件) |
 | 全量测试 | 228 passed(目标 ≥ 200) |
@@ -361,7 +367,7 @@ uv run pytest --cov=src/tcfd_extractor
 - ✅ 模块依赖图通过 AST 自动发现(无手维护)
 - ✅ `git diff tests/test_cooccurrence_evaluator.py` 为空(向后兼容)
 
-**GitHub Pages 部署**(推荐):将 `output/hr_report/` 推送到独立的 `tcfd-hr-report` 公开仓库,获得 `https://<user>.github.io/tcfd-hr-report/` 链接,可直接放入求职邮件正文。
+**GitHub Pages 部署**(推荐):将 `output/hr_report/` 推送到独立的 `tcfd-report` 公开仓库,获得 `https://somAzzz.github.io/tcfd-report/` 链接,可直接放入求职邮件正文。
 
 ## 贡献
 
