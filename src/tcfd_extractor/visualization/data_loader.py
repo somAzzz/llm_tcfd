@@ -1,0 +1,118 @@
+"""Load 25 years of evaluation results and compute aggregate statistics."""
+from __future__ import annotations
+
+import json
+import logging
+import re
+from collections import Counter, defaultdict
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+_YEAR_DIR_RE = re.compile(r"^\d{4}$")
+
+
+def load_all_results(results_root: Path) -> list[dict]:
+    """Load every JSONL record under `results_root/{year}/results.jsonl`."""
+    results: list[dict] = []
+    if not results_root.exists():
+        logger.warning("Results root does not exist: %s", results_root)
+        return results
+
+    for year_dir in sorted(results_root.iterdir()):
+        if not year_dir.is_dir():
+            continue
+        if not _YEAR_DIR_RE.match(year_dir.name):
+            continue
+        year = int(year_dir.name)
+        jsonl = year_dir / "results.jsonl"
+        if not jsonl.exists():
+            continue
+        with jsonl.open(encoding="utf-8") as f:
+            for line_no, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "Skipping malformed line %s:%d: %s",
+                        jsonl, line_no, line[:100],
+                    )
+                    continue
+                record["_year"] = year
+                results.append(record)
+    return results
+
+
+def years_with_data(results_root: Path) -> list[int]:
+    """Return sorted list of year integers that have a results.jsonl."""
+    if not results_root.exists():
+        return []
+    years: list[int] = []
+    for year_dir in sorted(results_root.iterdir()):
+        if year_dir.is_dir() and _YEAR_DIR_RE.match(year_dir.name):
+            if (year_dir / "results.jsonl").exists():
+                years.append(int(year_dir.name))
+    return years
+
+
+def _extract_company_id(file_field: str) -> str:
+    """Extract the leading company_id from a filename."""
+    if not file_field:
+        return "unknown"
+    base = file_field.split("/")[-1]
+    parts = base.split("-", 1)
+    return parts[0] if parts else "unknown"
+
+
+def compute_kpis(results: list[dict]) -> dict[str, Any]:
+    """Compute top-line KPIs from the loaded results."""
+    if not results:
+        return {"total_records": 0, "tcfd_count": 0, "total_companies": 0}
+    tcfd_count = sum(1 for r in results if r.get("is_tcfd_related"))
+    company_ids = {_extract_company_id(r.get("file", "")) for r in results}
+    return {
+        "total_records": len(results),
+        "tcfd_count": tcfd_count,
+        "total_companies": len(company_ids),
+    }
+
+
+def compute_dimension_distribution(results: list[dict]) -> dict[str, int]:
+    """Count records by `dimension` field. Always returns all 4 keys."""
+    counts: Counter = Counter()
+    for r in results:
+        dim = r.get("dimension", "无")
+        if dim:
+            counts[dim] += 1
+    for d in ("政策", "市场", "技术", "无"):
+        if d not in counts:
+            counts[d] = 0
+    return dict(counts)
+
+
+def compute_yearly_counts(results: list[dict]) -> dict[int, dict[str, int]]:
+    """Aggregate total and TCFD counts per year."""
+    agg: dict[int, dict[str, int]] = defaultdict(lambda: {"total": 0, "tcfd": 0})
+    for r in results:
+        year = r["_year"]
+        agg[year]["total"] += 1
+        if r.get("is_tcfd_related"):
+            agg[year]["tcfd"] += 1
+    return dict(sorted(agg.items()))
+
+
+def compute_top_keyword_pairs(
+    results: list[dict], n: int = 10
+) -> list[tuple[str, int]]:
+    """Return the top-N most frequent (keyword_a + keyword_b) pairs."""
+    pair_counts: Counter = Counter()
+    for r in results:
+        ka = r.get("keyword_a", "").strip()
+        kb = r.get("keyword_b", "").strip()
+        if ka and kb:
+            pair_counts[(ka, kb)] += 1
+    return pair_counts.most_common(n)
