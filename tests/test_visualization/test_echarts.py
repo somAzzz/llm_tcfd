@@ -7,9 +7,9 @@ from tcfd_extractor.visualization.echarts import (
     TCFD_THEME_CONFIG,
     _get_base_option,
     build_sunburst,
-    # build_streamgraph,  # Task 2.3
-    # build_network,      # Task 2.4
-    # build_sankey,       # Task 2.5
+    build_streamgraph,
+    # build_network,  # Task 2.4
+    # build_sankey,   # Task 2.5
 )
 
 
@@ -59,3 +59,23 @@ def test_build_sunburst_returns_echarts_option_skeleton():
     assert opt["series"][0]["type"] == "sunburst"
     assert len(opt["series"][0]["data"]) == 3  # 3 个 dim 根
     assert opt["series"][0]["data"][0]["children"][0]["name"] == "聚类A"
+
+
+def test_build_streamgraph_returns_stacked_line_series():
+    """Streamgraph: 3 个 stack='total' 的 line series + dataZoom 控件。"""
+    data = {
+        "years": [2020, 2021, 2022],
+        "series": [
+            {"name": "政策", "data": [5, 7, 9]},
+            {"name": "市场", "data": [2, 1, 3]},
+            {"name": "技术", "data": [3, 4, 6]},
+        ],
+    }
+    opt = build_streamgraph(data, TCFD_THEME_CONFIG)
+    assert len(opt["series"]) == 3
+    for s in opt["series"]:
+        assert s["type"] == "line"
+        assert s["stack"] == "total"
+        assert s.get("smooth") is True
+    assert "dataZoom" in opt
+    assert opt["xAxis"]["data"] == [2020, 2021, 2022]

@@ -74,3 +74,28 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
         "animationDuration": theme["animation_duration"],
     }]
     return opt
+
+
+def build_streamgraph(data: dict, theme: dict) -> dict:
+    """Streamgraph: year × 3 维 堆叠流图, dataZoom 缩放。"""
+    opt = _get_base_option("TCFD 披露趋势 (2000-2024)", "拖动底部滑块缩放时间区间")
+    opt["legend"] = {"top": 30, "data": [s["name"] for s in data["series"]]}
+    opt["xAxis"] = {"type": "category", "boundaryGap": False,
+                    "data": data["years"]}
+    opt["yAxis"] = {"type": "value"}
+    opt["dataZoom"] = [
+        {"type": "slider", "xAxisIndex": 0, "start": 0, "end": 100},
+        {"type": "inside", "xAxisIndex": 0},
+    ]
+    opt["series"] = []
+    for s in data["series"]:
+        opt["series"].append({
+            "name": s["name"],
+            "type": "line",
+            "stack": "total",
+            "smooth": True,
+            "data": s["data"],
+            "areaStyle": {"opacity": 0.7},
+            "emphasis": {"focus": "series"},
+        })
+    return opt
