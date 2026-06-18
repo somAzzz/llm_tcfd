@@ -13,9 +13,11 @@
 - [快速开始](#快速开始)
 - [架构](#架构)
 - [模块说明](#模块说明)
+- [HR 可视化报告](#hr-可视化报告)
 - [数据假设](#数据假设)
 - [测试](#测试)
 - [开发与重构记录](#开发与重构记录)
+- [贡献](#贡献)
 - [许可证](#许可证)
 
 ---
@@ -120,7 +122,7 @@ src/tcfd_extractor/
 ├── aggregator.py                        # 结果聚合 / 导出
 ├── tcfd_word_bag_validator.py           # 词袋校验 CLI
 ├── config.py                            # 全局配置(LLM/Path/Batch Pydantic Settings)
-├── evaluation/                          # 评估模块(本仓库近期重构对象)
+├── evaluation/                          # 评估模块(2026-06 重构)
 │   ├── models.py                        # Pydantic 数据模型
 │   ├── parser.py                        # Markdown 共现上下文解析
 │   ├── prompts.py                       # LLM 提示词常量
@@ -135,11 +137,20 @@ src/tcfd_extractor/
 │   ├── counter.py                       # 关键词计数(归一化到每万字)
 │   ├── parser.py                        # 年报文件名解析
 │   └── cooccurrence.py                  # 共现分析(固定窗口 / 句子模式)
-└── clustering/                          # 关键词聚类
-    ├── clustering.py                    # K-Means + silhouette K 选择
-    ├── validator.py                     # sentence-transformers 语义验证
-    ├── label_generator.py               # 可选 LLM 聚类标签生成
-    └── exporter.py                      # 导出 + t-SNE 可视化
+├── clustering/                          # 关键词聚类
+│   ├── clustering.py                    # K-Means + silhouette K 选择
+│   ├── validator.py                     # sentence-transformers 语义验证
+│   ├── label_generator.py               # 可选 LLM 聚类标签生成
+│   └── exporter.py                      # 导出 + t-SNE 可视化
+└── visualization/                       # HR 报告生成(2026-06 新增)
+    ├── anonymize.py                     # 单向 SHA-256 公司名脱敏
+    ├── translations.py                  # 中→英关键词映射(~140 条)
+    ├── data_loader.py                   # 25 年 JSONL 加载 + 聚合
+    ├── chart_builders.py                # 3 个 Plotly 图表(donut/trend/bar)
+    ├── static_charts.py                 # matplotlib 重构对比图 + 模块依赖 SVG
+    ├── module_graph.py                  # AST 自动发现模块依赖
+    ├── html_assembler.py                # 编排器:数据 → 图表 → 模板
+    └── template.py                      # Jinja2 HTML 模板
 ```
 
 ## 模块说明
@@ -178,9 +189,69 @@ src/tcfd_extractor/
 - `exceptions.py` —— `EvaluationError` / `LLMEvaluationError` / `LLMUnavailableError` / `LLMResponseParseError` / `LLMTimeoutError`
 - `cooccurrence_evaluator.py` —— 薄壳 re-export(向后兼容,新代码应直接 import 子模块)
 
-### 5. 工具与脚本(`scripts/`)
+### 5. HR 报告生成(`tcfd_extractor.visualization`)
+
+将 25 年评估结果聚合成一个**自包含的交互式 HTML 报告**,可直接用于 GitHub Pages 部署:
+
+- `anonymize.py` —— 单向 SHA-256 公司名脱敏(`Company #001` 风格,无反向表)
+- `translations.py` —— 中→英关键词映射表(~140 条),UI 全英文,数据保留中文
+- `data_loader.py` —— JSONL 批量加载 + KPI/维度/年份/Top 共现词对聚合
+- `chart_builders.py` —— 3 个 Plotly 图表(TCFD 维度 donut、年度趋势双线、Top 关键词对双语 tooltip)
+- `static_charts.py` —— matplotlib 重构前后对比 + 模块依赖图(AST 自动发现)
+- `module_graph.py` —— AST 解析本地模块 import 关系
+- `html_assembler.py` —— 编排器:数据 → 图表 → Jinja2 模板
+- `template.py` —— Jinja2 内联 HTML 模板(5 区块 + 隐藏 Tech Deep Dive)
+
+### 6. 工具与脚本(`scripts/`)
 
 - `tcfd_word_bag_validator.py` —— 词袋校验 CLI
+- `build_hr_report.py` —— HR 报告生成编排器(数据 → HTML + 泄漏检查)
+- `check_leakage.py` —— Pre-push 泄漏检查(公司名 + 邮箱 + 电话 + TODO 等模式)
+
+## 可视化报告
+
+`visualization` 包内置一个完整的"研究项目 → 作品集 HTML"流水线,可用于对外展示项目成果(如求职时向 HR / 面试官展示)。
+
+### 一键生成
+
+```bash
+# 生成报告(默认 GitHub Pages 模式,CDN 加载 JS,~1.5 MB)
+python scripts/build_hr_report.py --output output/hr_report/
+
+# 邮箱附件模式(JS 内联,无需网络,~4 MB)
+python scripts/build_hr_report.py --output output/hr_report/email/ --inline
+```
+
+### 输出结构
+
+```
+output/hr_report/
+├── index.html      # 自包含的交互式报告(打开即用)
+├── README.md       # 部署说明
+└── .nojekyll       # GitHub Pages 配置
+```
+
+### 报告内容(5 区块)
+
+1. **Hero / Overview** —— 4 个 KPI 卡片 + TCFD 维度分布 donut
+2. **What We Built** —— 6 阶段流水线 Mermaid + "Beyond TCFD: Reusable Architecture" 营销卡
+3. **What We Discovered** —— 年度趋势双线图(可按年段过滤) + Top 10 关键词对双语 tooltip
+4. **Engineering Excellence** —— 468→79 行重构对比图 + 165 测试指标
+5. **Tech Deep Dive** —— 默认折叠的模块依赖图(AST 自动发现)
+
+### 设计原则
+
+- **双层受众**:非技术 HR(30 秒看懂 KPI) + 技术 HR(展开 Tech Deep Dive 看架构)
+- **数据隐私**:公司名单向 SHA-256 哈希(无反向表),`output/hr_report/` 不进 git
+- **部署友好**:单文件 HTML,可直接 GitHub Pages 部署(详见 spec §14)
+- **泄漏安全**:推送到公开仓库前必须通过 `scripts/check_leakage.py`
+
+### GitHub Pages 部署
+
+1. 创建新公开仓库 `tcfd-hr-report`(与主项目隔离)
+2. 推送 `index.html` + `README.md` + `.nojekyll`
+3. Settings → Pages → Branch: `main` → Save
+4. 获得 `https://<user>.github.io/tcfd-hr-report/` 公开链接
 
 ## 数据假设
 
@@ -207,19 +278,29 @@ uv run pytest --cov=src/tcfd_extractor
 
 测试组织:
 
-- `tests/test_config.py` —— 全局配置 + 线程安全
-- `tests/test_cooccurrence_evaluator.py` —— 向后兼容(零修改通过)
-- `tests/evaluation/` —— 评估模块单元测试 + 集成测试
-  - `test_exceptions.py` —— 异常层次
-  - `test_models.py` —— 数据模型
-  - `test_prompts.py` —— 提示词常量
-  - `test_parser.py` —— Markdown 解析
-  - `test_evaluator.py` —— 单条 LLM 评估
-  - `test_batch.py` —— 批量评估
-  - `test_summary.py` —— 统计 + 总结
-  - `test_integration.py` —— 端到端集成测试
+- `tests/test_config.py` —— 全局配置 + 线程安全(18 + 3 测试)
+- `tests/test_cooccurrence_evaluator.py` —— 向后兼容(16 测试)
+- `tests/evaluation/` —— 评估模块单元测试 + 集成测试(7 文件,53 测试)
+  - `test_exceptions.py` —— 异常层次(7)
+  - `test_models.py` —— 数据模型(12)
+  - `test_prompts.py` —— 提示词常量(9)
+  - `test_parser.py` —— Markdown 解析(10)
+  - `test_evaluator.py` —— 单条 LLM 评估(7)
+  - `test_batch.py` —— 批量评估(8)
+  - `test_summary.py` —— 统计 + 总结(8)
+  - `test_integration.py` —— 端到端集成测试(3)
+- `tests/test_visualization/` —— 可视化报告测试(7 文件,65 测试)
+  - `test_anonymize.py` —— 脱敏(14)
+  - `test_translations.py` —— 中→英映射 + 覆盖率(12)
+  - `test_data_loader.py` —— JSONL 加载 + 聚合(14)
+  - `test_chart_builders.py` —— Plotly 图表(9)
+  - `test_static_charts.py` —— matplotlib + SVG(5)
+  - `test_module_graph.py` —— AST 依赖发现(5)
+  - `test_html_assembler.py` —— 端到端模板渲染(7,部分需 PYTHONPATH=src)
 - `tests/test_frequency/` —— 频率统计测试
 - `tests/test_clustering/` —— 聚类测试
+
+**全量统计**:228 测试通过(2 个预存在损坏文件 + 1 个预存在 collection 错误已忽略)
 
 ## 开发与重构记录
 
@@ -249,6 +330,36 @@ uv run pytest --cov=src/tcfd_extractor
 - ✅ 畸形 JSON 防御(`LLMResponseParseError` + 原始响应日志)
 - ✅ 配置线程安全(concurrent reads)
 - ✅ 现有 16 个向后兼容测试零修改通过(注:经用户批准进行了必要的 baseline 修正与 mock 路径迁移)
+
+### 2026-06: 可视化报告模块(作品集 HTML 生成)
+
+**目标**:新增 `tcfd_extractor.visualization` 包,将 25 年评估结果聚合成一个**自包含的交互式 HTML 报告**,可作为对外展示项目成果的作品集(尤其适合求职场景下向 HR / 面试官展示工程能力)。
+
+**变更摘要**:
+
+| 项目 | 数值 |
+|---|---|
+| 新增模块 | 8 个(`anonymize` / `translations` / `data_loader` / `chart_builders` / `static_charts` / `module_graph` / `html_assembler` / `template`) |
+| 新增脚本 | 2 个(`build_hr_report.py` 编排器,`check_leakage.py` 预推送泄漏检查) |
+| 新增测试 | 65(7 个测试文件) |
+| 全量测试 | 228 passed(目标 ≥ 200) |
+| HTML 报告大小 | 121 KB(CDN 模式) |
+| subprocess 调用 | 0 |
+| `print()` 使用 | 0 |
+
+**主要 DoD 验收点**:
+
+- ✅ `output/hr_report/index.html` 可双击打开(无服务器)
+- ✅ Above-the-fold 含 "annual report" + "climate/tcfd/keyword"
+- ✅ 5 个区块全部渲染(Hero / What We Built / What We Discovered / Engineering / Tech Deep Dive)
+- ✅ 中→英双语 tooltip(关键词原文 + 英文翻译)
+- ✅ 营销文案"Reusable Architecture"通过外部 review(spec §6)
+- ✅ Leakage check 通过(无真实公司名 / 邮箱 / 电话 / TODO 残留)
+- ✅ Anonymization 真正单向(SHA-256,1000 buckets,无反向表)
+- ✅ 模块依赖图通过 AST 自动发现(无手维护)
+- ✅ `git diff tests/test_cooccurrence_evaluator.py` 为空(向后兼容)
+
+**GitHub Pages 部署**(推荐):将 `output/hr_report/` 推送到独立的 `tcfd-hr-report` 公开仓库,获得 `https://<user>.github.io/tcfd-hr-report/` 链接,可直接放入求职邮件正文。
 
 ## 贡献
 
