@@ -8,7 +8,7 @@ from tcfd_extractor.visualization.echarts import (
     _get_base_option,
     build_sunburst,
     build_streamgraph,
-    # build_network,  # Task 2.4
+    build_network,
     # build_sankey,   # Task 2.5
 )
 
@@ -79,3 +79,29 @@ def test_build_streamgraph_returns_stacked_line_series():
         assert s.get("smooth") is True
     assert "dataZoom" in opt
     assert opt["xAxis"]["data"] == [2020, 2021, 2022]
+
+
+def test_build_network_returns_force_graph_with_unique_ids():
+    """Network builder: graph + force layout, 节点 id 唯一, symbolSize 在 [10, 60]。"""
+    data = {
+        "nodes": [
+            {"id": "词A", "name": "词A", "symbolSize": 15, "category": "政策", "value": 2},
+            {"id": "词B", "name": "词B", "symbolSize": 10, "category": "市场", "value": 1},
+            {"id": "词C", "name": "词C", "symbolSize": 60, "category": "政策", "value": 200},
+        ],
+        "links": [
+            {"source": "词A", "target": "词B", "weight": 5},
+            {"source": "词A", "target": "词C", "weight": 100},
+        ],
+    }
+    opt = build_network(data, TCFD_THEME_CONFIG)
+    assert opt["series"][0]["type"] == "graph"
+    assert opt["series"][0]["layout"] == "force"
+    assert opt["series"][0]["draggable"] is True
+    node_ids = [n["id"] for n in opt["series"][0]["nodes"]]
+    assert len(node_ids) == len(set(node_ids))
+    for n in opt["series"][0]["nodes"]:
+        assert 10 <= n["symbolSize"] <= 60
+    # 边界断言: 词C 频次最高, symbolSize 应被 clamp 到上限 60
+    nodes_by_id = {n["id"]: n for n in opt["series"][0]["nodes"]}
+    assert nodes_by_id["词C"]["symbolSize"] == 60

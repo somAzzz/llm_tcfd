@@ -99,3 +99,36 @@ def build_streamgraph(data: dict, theme: dict) -> dict:
             "emphasis": {"focus": "series"},
         })
     return opt
+
+
+def build_network(data: dict, theme: dict) -> dict:
+    """Force-directed 网络: 节点可拖拽, force layout。"""
+    opt = _get_base_option("关键词共现网络 (近 3 年)", "可拖拽节点, hover 显示共现次数")
+    n_edges = len(data["links"])
+    # 边数过少时, 注入 subtext 提示
+    if n_edges < 50:
+        opt["title"]["subtext"] = (
+            f"⚠️ 当前年份披露数据较少 (仅 {n_edges} 边), "
+            "已自动降低关联阈值展示"
+        )
+        opt["graphic"] = [{
+            "type": "text", "left": "center", "top": "middle",
+            "style": {"text": f"共 {len(data['nodes'])} 节点, {n_edges} 边",
+                      "fontSize": 14, "fill": "#666"},
+        }]
+    opt["series"] = [{
+        "type": "graph",
+        "layout": "force",
+        "nodes": data["nodes"],
+        "links": data["links"],
+        "categories": [{"name": "政策"}, {"name": "市场"}, {"name": "技术"}],
+        "roam": theme["global_roam"],
+        "draggable": True,
+        "force": {"repulsion": 80, "edgeLength": 50},
+        "emphasis": {"focus": "adjacency"},
+        "lineStyle": {"curveness": 0.1, "width": 1},
+        "label": {"show": True, "position": "right", "fontSize": 10},
+        "animation": theme["animation"],
+        "animationDuration": theme["animation_duration"],
+    }]
+    return opt
