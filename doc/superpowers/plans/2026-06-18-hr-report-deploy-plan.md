@@ -99,10 +99,13 @@ Expected:
 - 其它任何未提交改动 → 先 `git stash` 或 `git commit`
 - HEAD 应该是 `5440ed5` (spec commit) 之后, 或 spec commit 本身
 
-- [ ] **Step 2: 确认在 main 分支**
+- [ ] **Step 2: 确认在 main 分支 (硬约束)**
 
-Run: `git branch --show-current`
-Expected: `main`
+Run:
+```bash
+git branch --show-current | grep -q '^main$' || { echo "ABORT: not on main branch"; exit 1; }
+```
+Expected: 无输出 (静默通过); 失败则中止整个计划
 
 - [ ] **Step 3: 提交 (若有) .gitignore 修改**
 
@@ -196,12 +199,17 @@ Expected:
 - 头部含 `<!DOCTYPE html>` 或 `<html`
 - 尾部含 `</html>`
 
-- [ ] **Step 3: 验证关键 chart inline 数据存在**
+- [ ] **Step 3: index.html 大小 sanity floor**
+
+Run: `wc -c output/hr_report/index.html`
+Expected: > 1,000,000 (含 3 个 Plotly + 1 个 SVG + 1 个 matplotlib, 合理最小 1MB; 若 < 500KB 视为内容缺失, 中止调查)
+
+- [ ] **Step 4: 验证关键 chart inline 数据存在**
 
 Run: `grep -c "Plotly.newPlot\|<svg\|data:image/png;base64" output/hr_report/index.html`
 Expected: 至少 3 (3 个 Plotly + 1 个 SVG + 1 个 matplotlib base64)
 
-- [ ] **Step 4: 提交 (若有意) 文档类变更**
+- [ ] **Step 5: 提交 (若有意) 文档类变更**
 
 本步骤不产生 git 提交 — output/ 在 .gitignore 中, 不入版本库。
 
@@ -229,6 +237,8 @@ sed -i.bak \
   -e 's|<username>|somAzzz|g' \
   output/hr_report/README.md
 ```
+
+> **平台注意**: 以上是 GNU sed 语法 (Linux 适用)。 若在 macOS 上执行, 需改为 `sed -i '' -e '...' ...` (BSD sed 要求 `''` 占位)。 本计划目标环境是 Linux, 保持 GNU 语法。
 
 - [ ] **Step 3: 验证替换成功**
 
@@ -271,9 +281,9 @@ Run: `cat output/hr_report/README.md`
 
 Run: `uv run python scripts/check_leakage.py output/hr_report/index.html 2>&1`
 Expected:
-- 无 "LEAK" 或公司名命中
 - 退出码 = 0
-- 输出 "no leaks" 或类似成功消息
+- 输出恰好是: `✅ Leakage check passed for output/hr_report/index.html`
+- (若输出 "LEAK" 字样或公司名, 中止调查)
 
 ### Task 4.2: 列出推送内容
 
@@ -335,31 +345,51 @@ Expected: 列出 index.html, README.md, .nojekyll 等
 
 ### Task 5.3: 创建仓库并推送 (干净状态)
 
-- [ ] **Step 1: 一行创建 + 推送**
+**重要前置**: `output/hr_report/` 不是 git 仓库, `gh repo create --source` 要求源是 git 仓库, 因此必须先 `git init` 并做首次提交。 全部使用绝对路径避免 cwd 漂移。
+
+- [ ] **Step 1: 在 output/hr_report/ 中初始化 git 仓库并首次提交**
 
 Run:
 ```bash
-cd output/hr_report && \
+cd /home/bo/projects/python/frequency_analyzer
+set -e  # 任一命令失败立即停
+git init output/hr_report
+git -C output/hr_report add -A
+git -C output/hr_report -c user.email="noreply@github.com" -c user.name="somAzzz" commit -m "init: HR report artifacts (index.html, README.md, .nojekyll)"
+```
+
+Expected:
+- `Initialized empty Git repository in /home/bo/projects/python/frequency_analyzer/output/hr_report/.git/`
+- `1 file changed, ...` (或 3 files)
+- 退出码 = 0
+
+- [ ] **Step 2: 创建 + 推送仓库 (使用绝对路径)**
+
+Run:
+```bash
+cd /home/bo/projects/python/frequency_analyzer
 gh repo create tcfd-report --public \
   --description "TCFD Project Demo — interactive single-file HTML report" \
-  --source=. --remote=upstream --push && \
-cd ../..
+  --source /home/bo/projects/python/frequency_analyzer/output/hr_report \
+  --push
 ```
 
 Expected 关键输出:
 - `✓ Created repository somAzzz/tcfd-report on GitHub`
-- `✓ Added remote https://github.com/somAzzz/tcfd-report.git`
 - `✓ Pushed commits to https://github.com/somAzzz/tcfd-report.git`
 
-- [ ] **Step 2: 验证仓库可见**
+- [ ] **Step 3: 验证仓库可见**
 
-Run: `gh repo view somAzzz/tcfd-report --json name,visibility,url`
-Expected: `name: tcfd-report`, `visibility: PUBLIC`, `url: https://github.com/somAzzz/tcfd-report`
+Run: `gh repo view somAzzz/tcfd-report --json name,visibility,url --jq '"name=" + .name, "visibility=" + .visibility, "url=" + .url'`
+Expected:
+- `name=tcfd-report`
+- `visibility=PUBLIC`
+- `url=https://github.com/somAzzz/tcfd-report`
 
-- [ ] **Step 3: 验证 index.html 已推送**
+- [ ] **Step 4: 验证 index.html 已推送**
 
-Run: `gh api repos/somAzzz/tcfd-report/contents/index.html | jq -r '.name, .size, .html_url'`
-Expected: `index.html`, size > 100000, html_url 返回 GitHub blob 链接
+Run: `gh api repos/somAzzz/tcfd-report/contents/index.html --jq '.name + " size=" + (.size|tostring) + " url=" + .html_url'`
+Expected: `index.html size=NNNNNNN url=https://github.com/somAzzz/tcfd-report/blob/main/index.html` (size > 500000)
 
 ---
 
@@ -367,29 +397,37 @@ Expected: `index.html`, size > 100000, html_url 返回 GitHub blob 链接
 
 **Files:** 外部 `somAzzz/tcfd-report` Pages 设置
 
-### Task 6.1: 启用 Pages
+**重要**: `gh repo edit` **不支持** `--enable-pages` 或 `--pages-source` flags。 GitHub Pages 启用必须通过 REST API (`POST /repos/{owner}/{repo}/pages`)。
 
-- [ ] **Step 1: gh repo edit 启用 Pages**
+### Task 6.1: 启用 Pages (走 REST API)
+
+- [ ] **Step 1: POST 到 Pages API**
 
 Run:
 ```bash
-gh repo edit somAzzz/tcfd-report \
-  --enable-pages \
-  --pages-source branch=main,path=/
+gh api -X POST repos/somAzzz/tcfd-report/pages \
+  -f 'source[branch]=main' \
+  -f 'source[path]=/'
 ```
 
 Expected:
-- 无错误输出
 - 退出码 = 0
+- API 响应 JSON 含 `html_url` 字段, 值形如 `https://somAzzz.github.io/tcfd-report/`
+- 若响应 409 Conflict (Pages 已启用), 视为幂等成功, 继续
 
-- [ ] **Step 2: 验证 Pages 配置**
+- [ ] **Step 2: 验证 Pages 配置 (用 `html_url` 字段名, 不是 `url`)**
 
-Run: `gh api repos/somAzzz/tcfd-report/pages | jq -r '.url, .source.branch, .source.path, .status'`
+Run:
+```bash
+gh api repos/somAzzz/tcfd-report/pages --jq \
+  '"html_url=" + .html_url, "branch=" + .source.branch, "path=" + .source.path, "status=" + (.status // "null")'
+```
+
 Expected:
-- `url: https://somAzzz.github.io/tcfd-report/`
-- `source.branch: main`
-- `source.path: /`
-- `status: building` 或 `built`
+- `html_url=https://somAzzz.github.io/tcfd-report/`
+- `branch=main`
+- `path=/`
+- `status=building` 或 `built` (首次部署可能为 `null`, 不视为失败, Chunk 7 curl 会最终验证)
 
 ---
 
@@ -451,27 +489,27 @@ Expected: 含 `<!DOCTYPE html>` 或 `<html` 标签
 
 ### Task 8.1: 更新 README 添加部署链接
 
-- [ ] **Step 1: 读取 README.md HR 报告章节**
+**插入位置定位**: README.md 中存在 `## 可视化报告` 章节 (line 211, 标题不含 "HR" 前缀, 但 TOC 锚点为 `#hr-可视化报告`)。 英文版对应 `## Visualization Report` 章节。 在线链接应放在该章节标题下方第一段说明之上。
 
-Run: `grep -n "HR 可视化报告\|## HR" README.md | head -5`
-定位现有 "HR 可视化报告" 章节
+- [ ] **Step 1: 在 README.md 的 `## 可视化报告` 标题下插入链接**
 
-- [ ] **Step 2: 添加线上 URL 链接**
+Run: 用 Edit 工具, 在 `## 可视化报告` (line 211) 之后紧跟插入:
 
-在 HR 报告章节内加入:
 ```markdown
 **🌐 在线演示**: https://somAzzz.github.io/tcfd-report/
 ```
 
-(具体插入位置: 现有 "HR 可视化报告" 标题下, 紧跟首段说明)
+(空一行后接原 `\`visualization\` 包内置...` 段)
 
-- [ ] **Step 3: 同步到英文版**
+- [ ] **Step 2: 在 README.en.md 的 `## Visualization Report` 标题下插入链接**
 
-Run: `grep -n "HR Visualization Report\|## HR" README.en.md | head -5`
-对 `README.en.md` 同样位置加入:
+Run: 用 Edit 工具, 在 `## Visualization Report` 标题之后紧跟插入:
+
 ```markdown
 **🌐 Live demo**: https://somAzzz.github.io/tcfd-report/
 ```
+
+(空一行后接原段落)
 
 ### Task 8.2: 提交文档更新
 
@@ -529,7 +567,7 @@ code=$(curl -I -s -o /dev/null -w "%{http_code}" https://somAzzz.github.io/tcfd-
 - 仓库: `https://github.com/somAzzz/tcfd-report`
 - 8 个 Chunk 完成状态
 - 任何已知问题 (如 .gitignore 修改, Pages 部署延迟等)
-- 后续建议 (进入 Qwen 集成 / GH Actions 等)
+- (后续会话项目见 spec §9, 不在本次范围)
 
 ---
 
@@ -545,3 +583,7 @@ code=$(curl -I -s -o /dev/null -w "%{http_code}" https://somAzzz.github.io/tcfd-
 6. ❌ 自定义域名
 
 详见 spec §8 已知遗留问题 + §9 后续。
+
+### Spec 修订 (随本次计划一起提交)
+
+由于 v1 spec 错误地推荐了 `gh repo edit --enable-pages` (该 flags 在 gh CLI 中不存在), 已在 spec 修复版 (commit `8c7017` 之后的下一次提交) 中改为 `gh api -X POST .../pages`。 旧 spec `2026-06-18-hr-visualization-design.md` (29KB) 仍推荐 `tcfd-hr-report` 仓库名, 本计划**不**修改, 后续任务处理。

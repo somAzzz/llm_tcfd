@@ -41,9 +41,19 @@ output/evaluate_cooccurrence/2023/results.jsonl
        sed -i 's|tcfd-hr-report|tcfd-report|g; s|<username>|somAzzz|g' \
            output/hr_report/README.md
               ↓
-       gh repo create tcfd-report --public --source output/hr_report/ --push
+       # 先在 output/hr_report/ 中 git init + 首次提交
+       # (因为 --source 要求源是 git 仓库)
+       git -C /home/bo/projects/python/frequency_analyzer/output/hr_report init
+       git -C .../output/hr_report add -A
+       git -C .../output/hr_report commit -m "init: HR report artifacts"
               ↓
-       gh repo edit somAzzz/tcfd-report --enable-pages --pages-source main
+       gh repo create tcfd-report --public \
+         --source /home/bo/projects/python/frequency_analyzer/output/hr_report \
+         --push
+              ↓
+       # gh repo edit 不支持 --enable-pages, 改用 gh api 调 REST
+       gh api -X POST repos/somAzzz/tcfd-report/pages \
+         -f 'source[branch]=main' -f 'source[path]=/'
               ↓
        https://somAzzz.github.io/tcfd-report/
 ```
@@ -65,7 +75,7 @@ output/evaluate_cooccurrence/2023/results.jsonl
 |---|---|---|
 | `build_hr_report.py` 退出码 ≠ 0 | `$?` 检查 | 中止流程, 不推送; 输出泄漏检查报告让用户先修 |
 | `gh repo create` 失败 (同名仓库已存在) | gh CLI stderr | 1) 先 `gh api repos/somAzzz/tcfd-report/contents/` 列出已有内容; 2) 若为空或仅有无关文件, 确认 `gh repo delete somAzzz/tcfd-report` 后重建; 3) 若非空且不属于本任务, 改用新名字 (如 `tcfd-report-v2`) |
-| `gh repo edit --enable-pages` 失败 | gh CLI stderr | 给出 GitHub Settings → Pages 的手动启用链接, 不阻塞主流程 |
+| `gh api -X POST repos/.../pages` 失败 (Pages 启用) | gh CLI stderr / API 响应 body | 给出 GitHub Settings → Pages 的手动启用链接, 不阻塞主流程 |
 | Push 时 SSH 认证失败 (协议为 SSH) | gh CLI stderr / git stderr | 提示运行 `ssh -T git@github.com` 验证 key 注册; 必要时 `gh ssh-key add ~/.ssh/id_ed25519.pub` 添加公钥 |
 | 部署后 URL 404 / 5xx | `curl -I https://somAzzz.github.io/tcfd-report/` | 等待 60-120s 后重试; 首次部署证书签发可能需 5-10 分钟, 最多重试 3 次 |
 
@@ -79,7 +89,7 @@ output/evaluate_cooccurrence/2023/results.jsonl
 | 2. Post-build README 替换 | `grep "tcfd-report" output/hr_report/README.md` 命中; `grep "tcfd-hr-report" output/hr_report/README.md` 零命中 |
 | 3. 仓库创建 | `gh repo view somAzzz/tcfd-report` 可见 |
 | 4. 推送完成 | `gh api repos/somAzzz/tcfd-report/contents/index.html` 返回 200 |
-| 5. Pages 启用 | `gh api repos/somAzzz/tcfd-report/pages` 返回 `https` URL |
+| 5. Pages 启用 | `gh api repos/somAzzz/tcfd-report/pages` 返回 `html_url` 字段 (非 `url`) |
 | 6. 站点可达 | `curl -I https://somAzzz.github.io/tcfd-report/` 返回 200 |
 
 ## 7. 影响范围
