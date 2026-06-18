@@ -197,3 +197,70 @@ def load_streamgraph_data(eval_dir: Path, years: list[int]) -> dict:
         "years": actual_years,
         "series": [{"name": d, "data": series_data[d]} for d in dim_names],
     }
+
+
+def load_network_data(eval_dir: Path, years: list[int],
+                     top_n_edges: int = 500, min_weight: int = 5) -> dict:
+    """Force-directed 网络: 节点去重 + symbolSize clamp。
+
+    Args:
+        eval_dir: 含 <year>/results.jsonl 的目录
+        years: 年份列表 (近 3 年)
+        top_n_edges: 取权重最大的前 N 条边
+        min_weight: 边权重阈值 (低于此的边被过滤)
+
+    Returns:
+        {"nodes": [{"id", "name", "symbolSize", "category", "value"}],
+         "links": [{"source", "target", "weight"}],
+         "categories": [{"name": "政策"}]}
+    """
+    import json as _json
+    from collections import Counter
+    # 聚合边
+    edge_counter: Counter = Counter()
+    edge_dim: dict[tuple[str, str], str] = {}  # 边的 dim (取任一端的)
+    for year in years:
+        path = eval_dir / str(year) / "results.jsonl"
+        if not path.exists():
+            logger.warning("Network: missing results.jsonl for year=%d", year)
+            continue
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                row = _json.loads(line)
+                a, b = row.get("keyword_a"), row.get("keyword_b")
+                if not a or not b:
+                    continue
+                # 规范化: (小词, 大词) 保证无向图唯一
+                key = tuple(sorted([a, b]))
+                edge_counter[key] += 1
+                edge_dim[key] = row.get("dimension", "无")
+    # 过滤 + 排序
+    edges = [(k, v) for k, v in edge_counter.most_common(top_n_edges) if v >= min_weight]
+    if len(edges) < 50:
+        # 降阈值重试一次
+        edges = [(k, v) for k, v in edge_counter.most_common(top_n_edges)]
+    if len(edges) < 50:
+        logger.warning("Network: only %d edges after retry, will show subtext warning", len(edges))
+    # 节点去重 + freq 统计
+    seen: set[str] = set()
+    node_freq: Counter = Counter()
+    node_dim: dict[str, str] = {}
+    for (a, b), _w in edges:
+        for kw in (a, b):
+            if kw not in seen:
+                seen.add(kw)
+            node_freq[kw] += 1
+            node_dim[kw] = edge_dim.get((a, b), "无")
+    # 节点列表
+    nodes = []
+    for kw in seen:
+        size = max(10, min(60, 10 + node_freq[kw] * 0.5))
+        nodes.append({
+            "id": kw, "name": kw,
+            "symbolSize": size,
+            "category": node_dim.get(kw, "无"),
+            "value": node_freq[kw],
+        })
+    # 边列表
+    links = [{"source": a, "target": b, "weight": w} for (a, b), w in edges]
+    return {"nodes": nodes, "links": links}
