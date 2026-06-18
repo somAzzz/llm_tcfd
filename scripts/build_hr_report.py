@@ -8,8 +8,8 @@ Usage:
 The script:
 1. Loads all JSONL results from output/evaluate_cooccurrence/
 2. Anonymizes company names (via the visualization layer)
-3. Builds 3 Plotly charts + 1 matplotlib chart + 1 SVG module graph
-4. Renders the Jinja2 template with all chart data inlined
+3. Builds 4 ECharts charts (sunburst/streamgraph/network/sankey) + 1 matplotlib chart + 1 SVG module graph
+4. Renders the Jinja2 template with all chart data inlined (single-file HTML, 1.5-2MB)
 5. Writes index.html, README.md, .nojekyll to output dir
 6. Runs the leakage check (must pass for the script to exit 0)
 
