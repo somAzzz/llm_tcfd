@@ -116,3 +116,44 @@ def compute_top_keyword_pairs(
         if ka and kb:
             pair_counts[(ka, kb)] += 1
     return pair_counts.most_common(n)
+
+
+def load_sunburst_data(clusters_dir: Path) -> list[dict]:
+    """Sunburst 数据: 3 维 → 聚类 → 关键词 三层树。
+
+    真实 cluster JSON 格式: 顶层 list, 每项 {cluster_id, keywords, size, math_label}
+    文件名: {政策维度,市场维度,技术维度}_clusters.json
+
+    Args:
+        clusters_dir: 含 {政策维度,市场维度,技术维度}_clusters.json 的目录
+
+    Returns:
+        list of {name, children: [{name, children: [{name, value}]}]}
+    """
+    import json as _json
+    # 文件名用 "维度" 后缀, 显示名不带
+    dim_files = [("政策", "政策维度"), ("市场", "市场维度"), ("技术", "技术维度")]
+    result = []
+    for display_name, file_stem in dim_files:
+        path = clusters_dir / f"{file_stem}_clusters.json"
+        if not path.exists():
+            logger.warning("Sunburst: cluster file missing for dim=%s (path=%s), skipping",
+                           display_name, path)
+            result.append({"name": display_name, "children": []})
+            continue
+        with path.open(encoding="utf-8") as f:
+            data = _json.load(f)
+        # 真实 schema: 顶层 list, 每项 {cluster_id, math_label, keywords, size}
+        if not isinstance(data, list):
+            logger.warning("Sunburst: dim=%s file is not a list, skipping", display_name)
+            result.append({"name": display_name, "children": []})
+            continue
+        children = []
+        for cluster in data:
+            kw_children = [{"name": kw, "value": 1} for kw in cluster.get("keywords", [])]
+            children.append({
+                "name": cluster.get("math_label", f"cluster_{cluster.get('cluster_id', '?')}"),
+                "children": kw_children,
+            })
+        result.append({"name": display_name, "children": children})
+    return result
