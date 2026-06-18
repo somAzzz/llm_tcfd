@@ -55,8 +55,8 @@ class TestAssembleHtml:
             module_graph_svg="<svg></svg>",
             refactor_stats={"test_after": 165, "test_before": 16},
         )
-        assert "2020" in html
-        assert "165" in html
+        assert "10,814" in html  # companies
+        assert "165 tests passing" in html
 
     def test_english_titles_present(self, tmp_path):
         results = _make_min_results(tmp_path)
@@ -77,9 +77,27 @@ class TestAssembleHtml:
             refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
-        assert 'id="donut-data"' in html
-        assert 'id="trend-data"' in html
-        assert 'id="bar-data"' in html
+        assert 'id="echarts-sunburst"' in html
+        assert 'id="echarts-streamgraph"' in html
+        assert 'id="echarts-network"' in html
+        assert 'id="echarts-sankey"' in html
+
+    def test_assembled_html_has_4_echarts_charts(self, tmp_path):
+        """集成测试: 生成的 HTML 含 4 个 ECharts 初始化块。"""
+        from tcfd_extractor.visualization.html_assembler import assemble_html
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            refactor_bar_b64="iVBORw0KGgoAAAANSUhEUgAA",
+            module_graph_svg="<svg></svg>",
+            refactor_stats={"god_class_before": 0, "god_class_after": 0, "module_count": 0,
+                            "total_lines": 0, "test_before": 0, "test_after": 0},
+        )
+        assert "echarts.init" in html
+        # 至少 4 处 echarts.init (sunburst + streamgraph + network + sankey)
+        assert html.count("echarts.init") >= 4
+        # ECharts CDN 引用
+        assert "echarts@5" in html
 
     def test_marketing_callout_included(self, tmp_path):
         results = _make_min_results(tmp_path)

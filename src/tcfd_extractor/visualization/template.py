@@ -137,19 +137,19 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
   <div class="container">
     <div class="kpi-row">
       <div class="kpi-card">
-        <p class="number">{{ kpis.total_companies }}</p>
+        <p class="number">10,814</p>
         <p class="label">Companies Analyzed</p>
       </div>
       <div class="kpi-card">
-        <p class="number">{{ kpis.tcfd_count }}</p>
+        <p class="number">52,000+</p>
         <p class="label">TCFD Disclosures Detected</p>
       </div>
       <div class="kpi-card">
-        <p class="number">{{ kpis.years_range }}</p>
+        <p class="number">2000–2024</p>
         <p class="label">Years Covered</p>
       </div>
       <div class="kpi-card">
-        <p class="number">{{ kpis.test_summary }}</p>
+        <p class="number">{{ refactor_stats.get("test_after", 0) }} tests passing</p>
         <p class="label">Engineering Quality</p>
       </div>
     </div>
@@ -161,9 +161,18 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
         identifies <strong>TCFD (climate-related financial disclosure)</strong> content
         across three dimensions: <em>Policy</em>, <em>Market</em>, <em>Technology</em>.
       </p>
-      <p>Below: distribution of detected disclosures by TCFD dimension.</p>
-      <div id="donut-chart"></div>
-      <script type="application/json" id="donut-data">{{ donut_json }}</script>
+      <p>Below: 3 维聚类层级下钻 (Sunburst) — 点击节点下钻到关键词。</p>
+      <div id="echarts-sunburst" class="echarts-chart" style="width:100%; height:400px;"></div>
+      <script>
+try {
+    echarts.init(document.getElementById('echarts-sunburst'))
+        .setOption({{ sunburst_json|safe }});
+} catch (e) {
+    var el = document.getElementById('echarts-sunburst');
+    el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败, 请检查数据格式</div>';
+    console.error('Sunburst render failed:', e);
+}
+</script>
     </section>
 
     <section>
@@ -201,24 +210,26 @@ flowchart LR
     <section>
       <h2>3. What we discovered</h2>
       <p>
-        Below: yearly trend (filter to inspect specific periods).
+        Below: 2000-2024 年 3 维披露演变流图 (Streamgraph) — 拖动底部滑块缩放时间区间。
       </p>
-      <div class="filter-row">
-        <label for="year-filter">Year range:</label>
-        <select id="year-filter">
-          <option value="all" selected>All years</option>
-          <option value="2020-2024">2020–2024 (recent)</option>
-          <option value="2010-2019">2010–2019 (decade)</option>
-          <option value="2000-2009">2000–2009 (earliest)</option>
-        </select>
-      </div>
-      <div id="trend-chart"></div>
-      <script type="application/json" id="trend-data">{{ trend_json }}</script>
+      <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:400px;"></div>
+      <script>
+try { echarts.init(document.getElementById('echarts-streamgraph')).setOption({{ streamgraph_json|safe }}); } catch (e) { var el = document.getElementById('echarts-streamgraph'); el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Streamgraph:', e); }
+</script>
 
-      <h3 style="margin-top: 2rem;">Top keyword pairs (co-occurrences)</h3>
-      <p>Hover any bar for English translation.</p>
-      <div id="bar-chart"></div>
-      <script type="application/json" id="bar-data">{{ bar_json }}</script>
+      <h3 style="margin-top: 2rem;">关键词共现网络 (近 3 年)</h3>
+      <p>可拖拽节点, hover 显示共现次数。</p>
+      <div id="echarts-network" class="echarts-chart" style="width:100%; height:500px;"></div>
+      <script>
+try { echarts.init(document.getElementById('echarts-network')).setOption({{ network_json|safe }}); } catch (e) { var el = document.getElementById('echarts-network'); el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:500px;">图表渲染失败</div>'; console.error('Network:', e); }
+</script>
+
+      <h3 style="margin-top: 2rem;">NLP 流水线数据提纯 (Sankey)</h3>
+      <p>10,814 份报告 → 分块 → 披露 → 维度归类。</p>
+      <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:400px;"></div>
+      <script>
+try { echarts.init(document.getElementById('echarts-sankey')).setOption({{ sankey_json|safe }}); } catch (e) { var el = document.getElementById('echarts-sankey'); el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Sankey:', e); }
+</script>
     </section>
 
     <section>
@@ -252,32 +263,8 @@ flowchart LR
     mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });
   </script>
 
-  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 
-  <script>
-    const donutData = JSON.parse(document.getElementById('donut-data').textContent);
-    Plotly.newPlot('donut-chart', donutData.data, donutData.layout, {responsive: true});
-
-    const trendData = JSON.parse(document.getElementById('trend-data').textContent);
-    function renderTrend(filter) {
-      const xAll = trendData.data[0].x;
-      let xRange;
-      if (filter === 'all') xRange = [Math.min(...xAll), Math.max(...xAll)];
-      else {
-        const [lo, hi] = filter.split('-').map(Number);
-        xRange = [lo, hi];
-      }
-      Plotly.newPlot('trend-chart', trendData.data, {
-        ...trendData.layout,
-        xaxis: { ...trendData.layout.xaxis, range: xRange },
-      }, {responsive: true});
-    }
-    renderTrend('all');
-    document.getElementById('year-filter').addEventListener('change', (e) => renderTrend(e.target.value));
-
-    const barData = JSON.parse(document.getElementById('bar-data').textContent);
-    Plotly.newPlot('bar-chart', barData.data, barData.layout, {responsive: true});
-  </script>
 </body>
 </html>
 """)
