@@ -15,7 +15,7 @@
 
 **前置决策** (头脑风暴期间已锁):
 1. 库选型: 全部 4 图用 **ECharts** (Plotly 退役)
-2. 数据 scope 差异化: sunburst/streamgraph 25 年, force-directed 近 3 年, sankey 累计
+2. 数据 scope 差异化: streamgraph 25 年, sunburst snapshot (无时间维度, 纯层级), force-directed 近 3 年, sankey 累计
 3. 交互深度: 深度 (下钻/拖拽/缩放/路径高亮)
 4. 落地方式: 路径 A (完全迁移, 删除 Plotly)
 
@@ -105,6 +105,7 @@ TCFD_THEME_CONFIG = {
     "global_roam": True,   # 全部图支持 zoom/pan (ECharts roam=true)
     "animation": True,
     "animation_duration": 800,
+    "sankey_label_formatter": "function(p) { return p.name.replace(/^stage\\d+_/, ''); }",
 }
 ```
 
@@ -114,13 +115,15 @@ TCFD_THEME_CONFIG = {
 
 ## 5. 数据流详细 (4 个图)
 
-### 5.1 Sunburst (25 年, 3 维)
+### 5.1 Sunburst (snapshot, 3 维 → 聚类 → 关键词)
+
+**说明**: Sunburst 是当前聚类状态的快照视图, **不包含时间维度** (层级固定 3 层: dimension → cluster → keyword)。 25 年的演变由 Streamgraph 表达, 不在 Sunburst 中重复。
 
 | 维度 | 详情 |
 |---|---|
 | **数据源** | `output/tcfd_keywords/phase5_category_mapping/{政策,市场,技术}_clusters.json` |
-| **数据 shape** | 树形: `[{name: '政策', children: [{name: '聚类1', children: [{name: '词', value: 12}, ...]}, ...]}]` |
-| **聚合方法** | `load_sunburst_data() -> dict` |
+| **数据 shape** | 树形 (3 层): `[{name: '政策', children: [{name: '聚类1', children: [{name: '词', value: 12}, ...]}, ...]}]` |
+| **聚合方法** | `load_sunburst_data() -> dict` (无年份参数) |
 | **ECharts series** | `series[0].type='sunburst'`, `data=[3 个根]`, `label.rotate='tangential'`, click 事件下钻 |
 | **交互** | 点击内层节点 → 高亮路径 + 隐藏子树; 面包屑显示当前路径 |
 | **空处理** | 某维度 `children` 为空 → 跳过该子树, log warning |
@@ -129,12 +132,13 @@ TCFD_THEME_CONFIG = {
 
 | 维度 | 详情 |
 |---|---|
-| **数据源** | `output/evaluate_cooccurrence/<year>/summary.md` (已有 dim count) + 备用: 聚合 results.jsonl 的 dimension 字段 |
-| **数据 shape** | `{"years": [2000, ..., 2024], "series": [{"name": "政策", "data": [12, 15, ...]}, ...]}` |
-| **聚合方法** | `load_streamgraph_data() -> dict` |
+| **数据源 (主)** | `output/evaluate_cooccurrence/<year>/results.jsonl` (聚合每行的 `dimension` 字段, is_tcfd_related=true 才计) |
+| **数据源 (不用)** | `summary.md` (经验证只是 LLM thinking dump, 不含结构化 dim 计数, 不再使用) |
+| **数据 shape** | `{"years": [2000, ..., 2024], "series": [{"name": "政策", "data": [12, 15, ...]}, {"name": "市场", ...}, {"name": "技术", ...}]}` |
+| **聚合方法** | `load_streamgraph_data(years=range(2000, 2025)) -> dict` |
 | **ECharts series** | 3 个 `series`, 每个 `type='line'`, `stack='total'`, `areaStyle={opacity: 0.7}`, `smooth=True` |
 | **交互** | ECharts `dataZoom=[{type: 'slider'}, {type: 'inside'}]` 支持时间区间缩放; legend 切换 dim |
-| **空处理** | 某年某 dim 为 0 → 留空, 不报错 |
+| **空处理** | 某年某 dim 为 0 → 留空, 不报错; 某年 results.jsonl 缺失 → 跳过该年, log warning |
 
 ### 5.3 Force-directed (近 3 年: 2022-2024)
 
@@ -143,7 +147,7 @@ TCFD_THEME_CONFIG = {
 | **数据源** | `output/evaluate_cooccurrence/{2022,2023,2024}/results.jsonl` |
 | **数据 shape** | `{"nodes": [{"id": "词A", "name": "词A", "symbolSize": 25, "category": 0, "value": 50}], "links": [{"source": "词A", "target": "词B", "weight": 12}], "categories": [{"name": "政策"}]}` |
 | **聚合方法** | `load_network_data(years=[2022,2023,2024], top_n_edges=500, min_weight=5)` |
-| **关键算法** | (1) 遍历 JSONL, 聚合 `(keyword_a, keyword_b) -> weight`; (2) 过滤 `weight >= min_weight`; (3) 排序取 top 500 边; (4) **遍历这 500 边, 维护 `seen: set[str]` 严格去重节点**; (5) **计算每个节点的 total_freq (出现次数), 映射 `symbolSize = 10 + total_freq * 0.5`** (范围 10-60); (6) 节点 category 按 `dimension` 字段 (政策/市场/技术/无) |
+| **关键算法** | (1) 遍历 JSONL, 聚合 `(keyword_a, keyword_b) -> weight`; (2) 过滤 `weight >= min_weight`; (3) 排序取 top 500 边; (4) **遍历这 500 边, 维护 `seen: set[str]` 严格去重, 输出 `nodes: list[dict]` 中每个 id 唯一**; (5) **计算每个节点的 total_freq (在所有 500 边中作为 source/target 出现的总次数), 映射 `symbolSize = max(10, min(60, 10 + total_freq * 0.5))` 显式 clamp 到 [10, 60]**; (6) 节点 category 按 `dimension` 字段 (政策/市场/技术/无) |
 | **ECharts series** | `series[0].type='graph'`, `layout='force'`, `force.repulsion=80`, `draggable=True`, roam=True |
 | **交互** | 节点可拖拽; hover 显示 label; 边粗细映射 weight; 类别 legend 切换 |
 | **空处理** | 边数 < 50 → 自动降 `min_weight` 到 3 重试; 仍 < 50 → option 注入 `title.subtext` 提示 + `graphic` 中心提示 |
@@ -153,16 +157,17 @@ TCFD_THEME_CONFIG = {
 
 | 维度 | 详情 |
 |---|---|
-| **数据源** | `output/tcfd_keywords_summary.csv` (1001 行公司×年) + 估算的 chunk/disclosure 总数 |
+| **数据源** | (1) `output/tcfd_keywords_summary.csv` (1001 行, 列: 年报, 政策维度, 市场维度, 技术维度; 1 行 = 1 公司×年, 每行含 3 个 dim 的关键词列表) + (2) `output/evaluate_cooccurrence/<year>/results.jsonl` (披露计数: 每行 = 1 披露) + (3) 原始报告数: `ls /home/bo/projects/data/A股年报/*/*.txt | wc -l` 估算 |
 | **数据 shape** | `{"nodes": [{"name": "stage1_report_万科A_2023"}, {"name": "stage2_chunk_万科A_2023"}, ...], "links": [{"source": "stage1_report_万科A_2023", "target": "stage2_chunk_万科A_2023", "value": 152}, ...]}` |
 | **聚合方法** | `load_sankey_data() -> dict` |
 | **关键设计** | **所有节点加 `stage{N}_` 命名空间前缀**, 避免: (a) 公司名与阶段名碰撞, (b) 环状链路 (cyclic), (c) 节点混淆 |
-| **命名空间规则** | `stage1_report_<id>_<year>` (原始报告) → `stage2_chunk_<id>_<year>` (文本分块) → `stage3_disclosure_<id>_<year>` (提取披露) → `stage4_dim_{policy/market/tech}` (维度归类) |
-| **展示剥离** | ECharts `label.formatter = "params.name.replace(/^stage\\d+_/, '')"` 渲染时去掉前缀 |
+| **命名空间规则** | `stage1_report_<id>_<year>` (原始报告) → `stage2_chunk_<id>_<year>` (文本分块, 由 report_count × 历史均值估算) → `stage3_disclosure_<id>_<year>` (提取披露, 从 results.jsonl is_tcfd_related=true 行数) → `stage4_dim_{policy/market/tech}` (维度归类, 聚合所有 stage3) |
+| **展示剥离** | ECharts `label.formatter` (注入到 TCFD_THEME_CONFIG) 在渲染时去掉前缀 |
 | **节点聚合** | 阶段 4 维度归类合并所有公司 → 3 个聚合节点 (stage4_dim_policy 等), 避免单图节点爆炸 (>100 节点) |
+| **空处理 (阶段 4 维度)** | 若某维度在 summary.csv 全 0 关键词 → 省略该 stage4 节点 + 其所有入边, log warning "stage4_dim_<x> omitted: 0 keywords"; 其它维度仍渲染 |
 | **ECharts series** | `series[0].type='sankey'`, `emphasis.focus='adjacency'`, `lineStyle.curve=0.5` |
 | **交互** | hover 节点 → 高亮上下游路径 (`emphasis.focus='adjacency'`) |
-| **空处理** | 阶段 2/3 估算数据缺失 → 用经验值 (报告 1 份 ≈ 150 分块 ≈ 15 披露) + log warning 标记估算来源 |
+| **数据准确度** | 阶段 1/3 用真实计数 (文件/JSONL 聚合); 阶段 2 (chunk 数) 用经验值 (1 report ≈ 150 chunks, 来源: 历史 run, 可能 ±50% 误差), log warning 标记估算来源 |
 
 ## 6. 关键决策
 
@@ -174,10 +179,10 @@ TCFD_THEME_CONFIG = {
 | HTML 大小 | 1.5-2MB (ECharts ~1MB + 4 图 inline JSON ~500KB + 模板 ~50KB) | 单文件 GitHub Pages 限制 100MB, 充裕 |
 | Plotly 移除 | 立即移除 (删除 `chart_builders.py` + 依赖) | 用户选 A 完全迁移; 留兜底会双倍体积且风格割裂 |
 | Force-directed 边数 | Top 500 边 (默认), `min_weight=5` 起步, 自动降阈值到 3 | 3 年 ~10K 边 → 500 边视觉清晰; 极端稀疏自动重试 |
-| Force-directed symbolSize | `10 + total_freq * 0.5` (范围 10-60) | 高频核心词自动放大, 避免千词一面 |
-| Sankey 命名空间 | 所有节点加 `stage{N}_` 前缀, formatter 剥离 | 避免环状/碰撞/混淆 (你的 §3 反馈) |
+| Force-directed symbolSize | `max(10, min(60, 10 + total_freq * 0.5))` 显式 clamp | 高频核心词自动放大, 避免千词一面, 上限 60 防遮挡 |
+| Sankey 命名空间 | 所有节点加 `stage{N}_` 前缀, formatter 注入 TCFD_THEME_CONFIG | 避免环状/碰撞/混淆 (你的 §3 反馈) |
 | Sunburst 钻取 | 点击内层 → 高亮路径, 面包屑显示 | ECharts 原生支持 |
-| 浏览器端 try/catch | `try { setOption } catch { 灰底 + 失败提示 }` | 单图失败不阻断全页 (你的 §5 反馈) |
+| 浏览器端 try/catch | **4 个图各自独立** `try { chart.setOption } catch { 灰底 + 失败提示 }` | 单图失败不阻断全页 (你的 §5 反馈), 每个 div 独立渲染, 1 个挂掉其它 3 个仍显示 |
 | Worktree | 不使用, 沿用 main | 与上次部署决策一致, 任务独立可逆 |
 | 测试策略 | 骨架断言 (不 snapshot 完整 dict) | Stage 2 改样式不破坏测试 (你的 §6 反馈) |
 | Stage 1 文档 | 新建 1 spec (本文件) + 1 plan + 1 subagent-driven 实施 | 沿用上次的 spec → plan → execution 流程 |
@@ -194,7 +199,7 @@ TCFD_THEME_CONFIG = {
 | Force-directed 节点重复 id | 集合去重 (`seen: set[str]`) | 重复跳过, log warning; 不会渲染失败 |
 | Sankey 节点重复名 | 命名空间前缀 (`stage{N}_`) | 不会发生, 设计层面杜绝 |
 | Sankey 形成环 | link DAG 检查 | 若发现环, 抛 `CyclicLinkError` 中止该图构建 |
-| ECharts 浏览器端渲染失败 | `try { chart.setOption } catch (e)` | div 背景设 `#f0f0f0`, 居中显示 "图表渲染失败, 请检查数据格式", `console.error` 留 log |
+| ECharts 浏览器端渲染失败 | **每个 `echarts.init(id).setOption(opt)` 调用独立** `try { ... } catch (e)` 包裹 | 该 div 背景设 `#f0f0f0`, 居中显示 "图表渲染失败, 请检查数据格式", `console.error` 留 log; 其它 3 个图不受影响 |
 | `check_leakage.py` 失败 | exit code | 沿用现有逻辑, abort build |
 | HTML 大小超过 5MB | 累加 4 图 JSON + ECharts CDN + 模板大小 | 超过则抛 `HTMLSizeExceeded` 警告 + 让用户决策 |
 | pyproject.toml plotly 仍在 import | 静态检查 + 导入测试 | `grep -r "import plotly" src/` 失败, ci 卡住 |
@@ -204,14 +209,69 @@ TCFD_THEME_CONFIG = {
 | 测试类型 | 覆盖 | 数量目标 |
 |---|---|---|
 | 单元 (data_loader) | 4 个新聚合方法: 正常数据 + 边界 (空/单条/超大) | 4 方法 × 3 case = 12 test |
-| 单元 (echarts builders) | 4 个 builder 输出 option dict **骨架**断言 (type, data 长度, 关键字段) | 4 builders × 2 case = 8 test |
-| 单元 (TCFD_THEME_CONFIG) | 主题色 hex 格式校验, 字体字段非空, roam=True | 1 test |
+| 单元 (echarts builders) | 4 个 builder 输出 option dict **骨架**断言 (见下方具体断言) | 4 builders × 2 case = 8 test |
+| 单元 (TCFD_THEME_CONFIG) | 主题色 hex 格式校验, 字体字段非空, roam=True, sankey_label_formatter 字符串非空 | 1 test |
 | 集成 (html_assembler) | 全 build 跑通, 4 个图 inline `<script>` 块存在, ECharts CDN 引用 | 1-2 test |
 | 集成 (ECharts 配置静态校验) | 4 个 option dict 通过 ECharts `setOption` schema 校验 (用 ECharts 官方 schema 或自写) | 1 test |
 | 回归 | 现有 65 个 visualization 测试不挂 | 全绿 |
-| 视觉 | 手动: 部署后浏览器打开, 检查 4 图可渲染 + 交互正常 | 1 次手动 |
+| 视觉 | 手动: 部署后浏览器打开, 检查 4 图可渲染 + 交互正常 (见 §12 客观子检查) | 1 次手动 |
 
-**测试维护原则** (你的 §6 反馈): snapshot 测试只断言**核心骨架** (type, data 长度, 关键字段), 不 snapshot 完整 dict, 避免 Stage 2 调样式时大面积失效。
+**测试维护原则** (你的 §6 反馈): snapshot 测试只断言**核心骨架** (type, data 长度, 关键字段), 不 snapshot 完整 dict, 避免 Stage 2 调样式时大面积失效。 **严禁** `assert opt == {...full dict...}` 模式。
+
+**具体骨架断言示例** (实施时按此模式扩展):
+
+```python
+# test_echarts.py
+
+def test_sunburst_option_skeleton():
+    opt = build_sunburst(sunburst_data_fixture, TCFD_THEME_CONFIG)
+    assert opt["series"][0]["type"] == "sunburst"
+    assert len(opt["series"][0]["data"]) == 3  # 3 个 dim 根节点
+    first_dim = opt["series"][0]["data"][0]
+    assert "children" in first_dim
+    assert len(first_dim["children"]) >= 1  # 每个 dim 至少 1 个聚类
+    # 主题色已应用 (用全局, 不比对具体 hex)
+    assert "color" in opt
+    # 严禁:
+    # assert opt == {...}  # ← 禁止: 会因 Stage 2 样式调整大面积失效
+
+def test_streamgraph_option_skeleton():
+    opt = build_streamgraph(streamgraph_data_fixture, TCFD_THEME_CONFIG)
+    assert len(opt["series"]) == 3  # 3 个 dim 系列
+    for s in opt["series"]:
+        assert s["type"] == "line"
+        assert s["stack"] == "total"  # 堆叠形成 streamgraph
+    # 25 年默认全显
+    assert len(opt["series"][0]["data"]) == 25
+    # dataZoom 控件存在
+    assert "dataZoom" in opt
+
+def test_network_option_skeleton():
+    opt = build_network(network_data_fixture, TCFD_THEME_CONFIG)
+    assert opt["series"][0]["type"] == "graph"
+    assert opt["series"][0]["layout"] == "force"
+    assert opt["series"][0]["draggable"] is True
+    # 节点 id 唯一
+    node_ids = [n["id"] for n in opt["series"][0]["nodes"]]
+    assert len(node_ids) == len(set(node_ids))
+    # 节点 symbolSize 在 [10, 60] 范围
+    for n in opt["series"][0]["nodes"]:
+        assert 10 <= n["symbolSize"] <= 60
+
+def test_sankey_option_skeleton():
+    opt = build_sankey(sankey_data_fixture, TCFD_THEME_CONFIG)
+    assert opt["series"][0]["type"] == "sankey"
+    # 所有节点都有 stage{N}_ 前缀 (避免碰撞)
+    for n in opt["series"][0]["nodes"]:
+        assert n["name"].startswith("stage") and "_" in n["name"]
+    # formatter 来自 TCFD_THEME_CONFIG
+    assert "stage\\d+_" in opt["series"][0]["label"]["formatter"]
+    # stage4 维度归类合并为 3 个节点
+    stage4_nodes = [n for n in opt["series"][0]["nodes"] if n["name"].startswith("stage4_")]
+    assert len(stage4_nodes) <= 3
+```
+
+测试目录已确认存在: `tests/test_visualization/` (含 test_anonymize / test_chart_builders / test_data_loader / test_html_assembler / test_module_graph / test_static_charts / test_translations)。 新建 `test_echarts.py`, 扩展 `test_data_loader.py`, 扩展 `test_html_assembler.py` 集成测试。
 
 ## 9. 影响范围
 
@@ -239,16 +299,21 @@ TCFD_THEME_CONFIG = {
 | ECharts 5.5 API 在边缘 case 行为变化 | 4 图渲染异常 | 用稳定 5.5.0 (锁版本), 1 个 schema 静态校验 test |
 | 单文件 1.5-2MB 加载慢 (网络) | 用户体验下降 | ECharts CDN 走 jsdelivr (国内可访问); 浏览器缓存 ECharts |
 | 移除 Plotly 后, 现有 65 个 visualization 测试中有依赖 | 回归失败 | grep `from tcfd_extractor.visualization.chart_builders` 找引用, 全部改为 echarts.py; CI 卡住 |
-| Sankey 阶段 2/3 估算数据不准确 | 数字失真 | log warning 标记 "估算", 后续可接入真实 chunk/disclosure 计数 |
-| Force-directed 边数 500 不足以体现核心节点 | 信息密度低 | 备选: 边数做成 slider, 用户从 100 调到 2000 |
+| Sankey 阶段 2 (chunk 数) 估算不准 (±50%) | 数字失真 | log warning 标记 "估算", 阶段 1/3 用真实计数 (results.jsonl 聚合), 仅阶段 2 是估算 |
+| Force-directed 边数 500 不足以体现核心节点 | 信息密度低 | log warning if top 500 edges miss core high-freq nodes (与 summary.csv top terms 比对, 缺词 > 30% 则 warn) |
+| Sankey 阶段 4 某 dim 全 0 | 单边孤立导致图渲染异常 | §5.4 显式空处理: 省略 stage4 节点 + 其入边, log warning |
 
-## 11. 后续 (Stage 2, 不在本 spec 范围)
+## 11. Out of Scope (Stage 2 — separate spec, not this one)
+
+以下 5 项在 Stage 2 单独 spec 中处理, **本 spec 不实现**:
 
 - 网格 + KPI 卡片布局 (替换瀑布流)
 - 语义色 + 暗色模式 (基于现有 TCFD_THEME_CONFIG 扩展)
 - Inter 字体 + 留白优化
 - Alpine.js 状态管理 + LLM-extracted snippet tooltip (需 LLM 重新跑提取)
-- 模块图从 Mermaid 迁到 ECharts (可选, 暂不决策)
+- 模块图从 Mermaid 迁到 ECharts (可选, Stage 2 决定)
+
+**严禁** 在本次实施中扩展这些项。 本次 spec 仅限 Stage 1 的 4 个高级图表升级。
 
 ## 12. 验证清单 (实施完成后)
 
@@ -259,5 +324,9 @@ TCFD_THEME_CONFIG = {
 - [ ] `wc -c output/hr_report/index.html` 介于 1.5MB-2.0MB
 - [ ] `grep -c 'echarts.init' output/hr_report/index.html` 命中 4
 - [ ] `python scripts/check_leakage.py output/hr_report/index.html` 退出码 0
-- [ ] 浏览器打开, 4 图渲染成功 + 交互正常 (sunburst 点击下钻, network 拖拽节点, streamgraph 缩放, sankey hover 高亮)
+- [ ] 浏览器打开 `output/hr_report/index.html`, 4 图渲染成功 + 客观交互检查:
+  - (a) **Sunburst**: 点击 "政策" 根 → 子聚类展开, 面包屑显示 "TCFD / 政策"
+  - (b) **Streamgraph**: 拖动底部 dataZoom slider → x 轴范围从 25 年缩到所选区间
+  - (c) **Network**: 鼠标拖拽任一节点 → 该节点位置变化 (其他节点按 force layout 重排)
+  - (d) **Sankey**: hover 任一节点 → 相邻边变深, 其它边变浅 (`emphasis.focus='adjacency'`)
 - [ ] GitHub Pages 重新部署, `https://somAzzz.github.io/tcfd-report/` 200
