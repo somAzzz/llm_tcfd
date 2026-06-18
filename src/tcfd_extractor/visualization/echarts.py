@@ -132,3 +132,22 @@ def build_network(data: dict, theme: dict) -> dict:
         "animationDuration": theme["animation_duration"],
     }]
     return opt
+
+
+def build_sankey(data: dict, theme: dict) -> dict:
+    """Sankey: 4 阶段流水线, 节点命名空间前缀, 渲染时剥离。"""
+    opt = _get_base_option("NLP 流水线数据提纯",
+                          "10,814 份报告 → 分块 → 披露 → 维度归类")
+    opt["series"] = [{
+        "type": "sankey",
+        "nodes": data["nodes"],
+        "links": data["links"],
+        "emphasis": {"focus": "adjacency"},
+        "lineStyle": {"color": "gradient", "curveness": 0.5},
+        "label": {
+            "formatter": theme["sankey_label_formatter"],
+            "fontSize": 11,
+        },
+        "left": 20, "right": 100, "top": 60, "bottom": 20,
+    }]
+    return opt

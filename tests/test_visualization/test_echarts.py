@@ -9,7 +9,7 @@ from tcfd_extractor.visualization.echarts import (
     build_sunburst,
     build_streamgraph,
     build_network,
-    # build_sankey,   # Task 2.5
+    build_sankey,
 )
 
 
@@ -105,3 +105,26 @@ def test_build_network_returns_force_graph_with_unique_ids():
     # 边界断言: 词C 频次最高, symbolSize 应被 clamp 到上限 60
     nodes_by_id = {n["id"]: n for n in opt["series"][0]["nodes"]}
     assert nodes_by_id["词C"]["symbolSize"] == 60
+
+
+def test_build_sankey_returns_sankey_with_namespace_prefix():
+    """Sankey builder: type='sankey', 节点都有 stage{N}_ 前缀, formatter 剥离。"""
+    data = {
+        "nodes": [
+            {"name": "stage1_report_万科A_2023"},
+            {"name": "stage2_chunk_万科A_2023"},
+            {"name": "stage3_disclosure_万科A_2023"},
+            {"name": "stage4_dim_policy"},
+        ],
+        "links": [
+            {"source": "stage1_report_万科A_2023", "target": "stage2_chunk_万科A_2023", "value": 150},
+            {"source": "stage2_chunk_万科A_2023", "target": "stage3_disclosure_万科A_2023", "value": 27},
+            {"source": "stage3_disclosure_万科A_2023", "target": "stage4_dim_policy", "value": 2},
+        ],
+    }
+    opt = build_sankey(data, TCFD_THEME_CONFIG)
+    assert opt["series"][0]["type"] == "sankey"
+    for n in opt["series"][0]["nodes"]:
+        assert n["name"].startswith("stage")
+    # formatter 来自 TCFD_THEME_CONFIG
+    assert "stage\\d+_" in opt["series"][0]["label"]["formatter"]
