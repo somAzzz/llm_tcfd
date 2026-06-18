@@ -264,3 +264,102 @@ def load_network_data(eval_dir: Path, years: list[int],
     # 边列表
     links = [{"source": a, "target": b, "weight": w} for (a, b), w in edges]
     return {"nodes": nodes, "links": links}
+
+
+def load_sankey_data(eval_dir: Path,
+                    summary_csv: Path | None = None,
+                    chunk_per_report: int = 150) -> dict:
+    """Sankey: 4 阶段流水线, 阶段 1/2/3 按 year 聚合 (避免节点爆炸)。
+
+    真实文件路径 (相对项目根):
+        summary_csv = output/tcfd_keywords/tcfd_keywords_summary.csv
+        eval_dir    = output/evaluate_cooccurrence/
+
+    Args:
+        eval_dir: evaluate_cooccurrence 目录 (用于披露计数)
+        summary_csv: 可选覆盖路径, 默认 output/tcfd_keywords/tcfd_keywords_summary.csv
+        chunk_per_report: 经验估算 (1 report ≈ 150 chunks, ±50% 误差)
+
+    Returns:
+        {"nodes": [{"name": "stage1_report_2023"}, ...],
+         "links": [{"source": "...", "target": "...", "value": N}]}
+    """
+    import csv as _csv
+    import json as _json
+    from collections import defaultdict
+    if summary_csv is None:
+        summary_csv = Path("output/tcfd_keywords/tcfd_keywords_summary.csv")
+    # 读 summary.csv, 按 year 聚合 (不按 company-year, 避免节点爆炸)
+    year_data: dict[int, dict] = {}  # {year: {report_count, policy_keywords, market_keywords, tech_keywords}}
+    with summary_csv.open(encoding="utf-8") as f:
+        reader = _csv.DictReader(f)
+        for row in reader:
+            fn = row["年报"]
+            # 真实格式: {company_id}-{company_name}-{year}年年度报告.txt
+            # 例: 000629-攀钢钢钒-2008年年度报告.txt
+            # 倒数第 2 个 "-" 后面是年份
+            try:
+                # 用 rsplit 找最后一个 "年" 之前的数字
+                if "年年度报告" not in fn:
+                    continue
+                year_str = fn.split("年年度报告")[0].rsplit("-", 1)[-1]
+                year = int(year_str)
+            except (ValueError, IndexError):
+                continue
+            if year not in year_data:
+                year_data[year] = {
+                    "report_count": 0,
+                    "policy": set(), "market": set(), "tech": set(),
+                }
+            year_data[year]["report_count"] += 1
+            for dim, key in [("政策维度", "policy"), ("市场维度", "market"), ("技术维度", "tech")]:
+                kws = row.get(dim, "")
+                for k in kws.split(","):
+                    k = k.strip()
+                    if k:
+                        year_data[year][key].add(k)
+    # 阶段 1/2/3 按 year 聚合 (75 节点 = 25 年 × 3 阶段)
+    nodes: set[str] = set()
+    links: list[dict] = []
+    stage4_value: dict[str, int] = defaultdict(int)  # dim → total
+    for year, data in year_data.items():
+        stage1_name = f"stage1_report_{year}"
+        stage2_name = f"stage2_chunk_{year}"
+        stage3_name = f"stage3_disclosure_{year}"
+        nodes.update([stage1_name, stage2_name, stage3_name])
+        # 阶段 1 → 2: report_count × chunk_per_report (估算)
+        links.append({
+            "source": stage1_name, "target": stage2_name,
+            "value": data["report_count"] * chunk_per_report,
+        })
+        # 阶段 2 → 3: 真实披露数 (从 results.jsonl 聚合 is_tcfd_related=true)
+        jsonl_path = eval_dir / str(year) / "results.jsonl"
+        disclosure_count = 0
+        if jsonl_path.exists():
+            with jsonl_path.open(encoding="utf-8") as f:
+                for line in f:
+                    r = _json.loads(line)
+                    if r.get("is_tcfd_related"):
+                        disclosure_count += 1
+        else:
+            logger.warning("Sankey: missing results.jsonl for year=%d, using 0", year)
+        links.append({
+            "source": stage2_name, "target": stage3_name, "value": disclosure_count,
+        })
+        # 阶段 3 → 4: 按 dim 拆分
+        for dim_en in ("policy", "market", "tech"):
+            kw_set = data[dim_en]
+            if kw_set:
+                stage4_name = f"stage4_dim_{dim_en}"
+                value = len(kw_set)
+                links.append({
+                    "source": stage3_name, "target": stage4_name, "value": value,
+                })
+                stage4_value[stage4_name] += value
+    # 添加 stage4 节点
+    for stage4_name in stage4_value:
+        nodes.add(stage4_name)
+    return {
+        "nodes": [{"name": n} for n in sorted(nodes)],
+        "links": links,
+    }
