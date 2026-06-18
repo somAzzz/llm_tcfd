@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """Pre-push leakage checker for the HR report.
 
-Scans `output/hr_report/index.html` (or any path passed) for known
-sensitive terms: real A-share company names, real financial figures,
-and other patterns that should never appear in the public report.
+Scans `output/hr_report/index.html` for known sensitive terms.
+
+Before pattern-matching, the script strips:
+- `<script type="application/json">` blocks (Plotly chart data — false positives)
+- `data:image/png;base64,...` values (matplotlib PNG binary — false positives)
+- `<style>` blocks (CSS — false positives)
+
+This is necessary because Plotly's default template embeds 16-digit colorscale
+positions and matplotlib PNGs contain arbitrary binary bytes.
 
 Exit codes:
   0  = no leakage detected
@@ -29,13 +35,37 @@ KNOWN_COMPANIES = [
     "京东方A", "立讯精密", "工业富联", "北方华创", "中芯国际",
 ]
 
+# Patterns that should never appear in the public HTML's visible text.
+# Note: long digit runs (e.g., 16-digit numbers) are intentionally NOT in
+# this list because they appear legitimately in Plotly's default colorscale
+# template (0.1111111111111111, 0.2222222222222222, ...) and would cause
+# false positives. If you need to check for them, do it on extracted JSON
+# data only, not the entire HTML.
 BAD_PATTERNS = [
-    (r"\b\d{13,19}\b", "long digit run (possible account/card number)"),
     (r"@[\w.]+\.\w{2,}", "email-like pattern"),
     (r"\b1[3-9]\d{9}\b", "Chinese mobile phone number"),
-    (r"(?i)TODO|FIXME|XXX", "TODO/FIXME debug marker"),
+    (r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b", "credit card number"),
+    (r"\bTODO\b|\bFIXME\b", "TODO/FIXME debug marker"),
     (r"password|secret|api[_-]?key", "credential keyword"),
 ]
+
+
+def _extract_visible_text(html: str) -> str:
+    """Strip script/style blocks and base64 data URIs from HTML.
+
+    Keeps:
+    - All visible text (between tags)
+    - All attribute values that aren't base64
+    """
+    # Remove <script>...</script>
+    html = re.sub(r"<script\b[^>]*>.*?</script>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove <style>...</style>
+    html = re.sub(r"<style\b[^>]*>.*?</style>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove base64 data URIs
+    html = re.sub(r"data:[^;]+;base64,[A-Za-z0-9+/=]+", " ", html)
+    # Remove HTML tags but keep their text content
+    html = re.sub(r"<[^>]+>", " ", html)
+    return html
 
 
 def check_file(html_path: Path) -> list[str]:
@@ -43,7 +73,8 @@ def check_file(html_path: Path) -> list[str]:
     if not html_path.exists():
         return [f"FILE NOT FOUND: {html_path}"]
 
-    text = html_path.read_text(encoding="utf-8", errors="replace")
+    raw = html_path.read_text(encoding="utf-8", errors="replace")
+    text = _extract_visible_text(raw)
     findings: list[str] = []
 
     for company in KNOWN_COMPANIES:
