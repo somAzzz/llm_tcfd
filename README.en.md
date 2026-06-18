@@ -210,6 +210,8 @@ Aggregates 25 years of evaluation results into a **self-contained interactive HT
 
 ## Visualization Report
 
+**🌐 Live demo**: https://somAzzz.github.io/tcfd-report/
+
 The `visualization` package ships a complete "research project → portfolio HTML" pipeline, useful for showcasing project results (especially for job applications to HR / hiring managers).
 
 ### One-command generation

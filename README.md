@@ -210,6 +210,8 @@ src/tcfd_extractor/
 
 ## 可视化报告
 
+**🌐 在线演示**: https://somAzzz.github.io/tcfd-report/
+
 `visualization` 包内置一个完整的"研究项目 → 作品集 HTML"流水线,可用于对外展示项目成果(如求职时向 HR / 面试官展示)。
 
 ### 一键生成
