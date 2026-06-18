@@ -157,3 +157,43 @@ def load_sunburst_data(clusters_dir: Path) -> list[dict]:
             })
         result.append({"name": display_name, "children": children})
     return result
+
+
+def load_streamgraph_data(eval_dir: Path, years: list[int]) -> dict:
+    """Streamgraph: year × 3 维 矩阵。
+
+    Args:
+        eval_dir: 含 <year>/results.jsonl 的目录
+        years: 年份列表 (e.g., range(2000, 2025))
+
+    Returns:
+        {"years": [...], "series": [{"name": "政策", "data": [...]}, ...]}
+    """
+    import json as _json
+    dim_names = ["政策", "市场", "技术"]
+    series_data = {d: [] for d in dim_names}
+    actual_years = []
+    for year in years:
+        path = eval_dir / str(year) / "results.jsonl"
+        if not path.exists():
+            logger.warning("Streamgraph: missing results.jsonl for year=%d", year)
+            for d in dim_names:
+                series_data[d].append(0)
+            actual_years.append(year)
+            continue
+        counts = {d: 0 for d in dim_names}
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                row = _json.loads(line)
+                if not row.get("is_tcfd_related"):
+                    continue
+                dim = row.get("dimension", "无")
+                if dim in counts:
+                    counts[dim] += 1
+        for d in dim_names:
+            series_data[d].append(counts[d])
+        actual_years.append(year)
+    return {
+        "years": actual_years,
+        "series": [{"name": d, "data": series_data[d]} for d in dim_names],
+    }
