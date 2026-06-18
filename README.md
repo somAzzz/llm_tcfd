@@ -189,7 +189,7 @@ src/tcfd_extractor/
 - `exceptions.py` —— `EvaluationError` / `LLMEvaluationError` / `LLMUnavailableError` / `LLMResponseParseError` / `LLMTimeoutError`
 - `cooccurrence_evaluator.py` —— 薄壳 re-export(向后兼容,新代码应直接 import 子模块)
 
-### 5. HR 报告生成(`tcfd_extractor.visualization`)
+### 5. 报告生成(`tcfd_extractor.visualization`)
 
 将 25 年评估结果聚合成一个**自包含的交互式 HTML 报告**,可直接用于 GitHub Pages 部署:
 

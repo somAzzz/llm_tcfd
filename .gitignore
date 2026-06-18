@@ -85,8 +85,8 @@ data/
 
 # ============ 显式保留 ============
 # 反向声明：保留 doc/superpowers/ 下的设计文档与计划
-!doc/superpowers/
-!doc/superpowers/specs/
-!doc/superpowers/specs/*.md
-!doc/superpowers/plans/
-!doc/superpowers/plans/*.md
+doc/superpowers/
+doc/superpowers/specs/
+doc/superpowers/specs/*.md
+doc/superpowers/plans/
+doc/superpowers/plans/*.md
