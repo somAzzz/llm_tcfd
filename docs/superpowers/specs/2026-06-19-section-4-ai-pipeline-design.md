@@ -101,7 +101,7 @@ We reuse the existing ECharts dashboard infrastructure (palette, dark-mode style
   </div>
 
   <!-- Hidden module graph (Deep Dive) -->
-  <div x-show="$store.global.showDeepDive" x-transition.opacity.duration.300ms
+  <div x-show="$store.pipelineUi.showDeepDive" x-transition.opacity.duration.300ms
        style="margin-top: 1rem;">
     <h3 style="margin-top: 1rem; color: var(--accent);">
       🧩 Module Dependency Graph (click any bar to collapse)
@@ -162,7 +162,7 @@ Add the following to the existing `<style>` block in `template.py` (next to the 
 
 - **Any bar** in the chart (Before or After, any of the 4 metrics) toggles the same hidden module graph.
 - Implementation: a single `__hrToggleDeepDive()` function in the page's `DOMContentLoaded` handler (see §5.4).
-- The Alpine state lives in a **new** global store: `Alpine.store('global', { showDeepDive: false })`. (The existing `hrApp` store stays untouched.)
+- The Alpine state lives in a **new** namespaced store: `Alpine.store('pipelineUi', { showDeepDive: false })`. (The existing `hrApp` store stays untouched.)
 
 ---
 
@@ -217,10 +217,11 @@ SCHEMA_COMPLIANCE = PipelineMetric(
     name="Output Schema Compliance",
     unit="%",
     before=62.0,       # pre-refactor: bare json.loads, ~38% parse failures
-    after=100.0,       # post-refactor: Pydantic v2 ValidationError raises
+    after=100.0,       # post-refactor: Pydantic v2 EvaluationResult.model_validate
     note="Sampled 200 LLM responses from output/evaluate_cooccurrence/2020/. "
          "Pre-refactor: 124/200 parse OK (62%). Post-refactor: 200/200 "
-         "validated via EvaluationRow.model_validate_json(...).",
+         "validated via EvaluationResult.model_validate(...) in "
+         "src/tcfd_extractor/evaluation/evaluator.py.",
 )
 
 
@@ -285,73 +286,87 @@ Replace the existing `build_refactor_dashboard` with:
 ```python
 def build_pipeline_health_dashboard(
     metrics: Sequence[PipelineMetric],
+    theme: dict,
 ) -> dict:
     """Build the AI Pipeline Resilience & Engineering Health ECharts option.
 
     Each metric becomes a grouped bar pair (Before / After).
     Y-axis is hidden; per-bar label shows formatted value with unit.
+    Inherits `_get_base_option()` styling (chart background, text style,
+    animation) so the dashboard participates in the `applyTheme()` cycle
+    used by the other 4 ECharts dashboards in the report.
     """
     bar_labels = [m.name for m in metrics]
     before_vals = [m.before for m in metrics]
     after_vals  = [m.after  for m in metrics]
 
-    return {
-        "title": {
-            "text": "AI Pipeline Resilience & Engineering Health",
-            "left": "center",
-            "textStyle": {"color": "#c9d1d9", "fontWeight": 600, "fontSize": 16},
-        },
-        "tooltip": {
-            "trigger": "axis",
-            "axisPointer": {"type": "shadow"},
-            "formatter": _PIPELINE_HEALTH_TOOLTIP_FN,  # JS source string
-        },
-        "legend": {
-            "data": ["Before (god-class)", "After (refactored)"],
-            "top": 32,
-            "textStyle": {"color": "#8b949e"},
-        },
-        "grid": {"left": 50, "right": 30, "top": 80, "bottom": 50},
-        "xAxis": {
-            "type": "category",
-            "data": bar_labels,
-            "axisLabel": {"color": "#c9d1d9", "interval": 0, "fontSize": 11,
-                          "formatter": _WRAP_XAXIS_FN},  # wrap long labels
-        },
-        "yAxis": {"type": "value", "show": False},
-        "color": ["#8b3a3a", "#56d364"],
-        "series": [
-            {
-                "name": "Before (god-class)",
-                "type": "bar",
-                "data": [
-                    {"value": v, "metric": m} for v, m in zip(before_vals, metrics)
-                ],
-                "label": {
-                    "show": True,
-                    "position": "top",
-                    "color": "#c9d1d9",
-                    "formatter": _LABEL_FN,  # JS source string
-                },
-                "emphasis": {"focus": "series"},
-            },
-            {
-                "name": "After (refactored)",
-                "type": "bar",
-                "data": [
-                    {"value": v, "metric": m} for v, m in zip(after_vals, metrics)
-                ],
-                "label": {
-                    "show": True,
-                    "position": "top",
-                    "color": "#56d364",
-                    "formatter": _LABEL_FN,
-                },
-                "emphasis": {"focus": "series"},
-            },
-        ],
+    opt = _get_base_option(
+        "AI Pipeline Resilience & Engineering Health",
+        "Click any bar to view the module graph",
+    )
+    opt["title"]["left"] = "center"
+    opt["title"]["textStyle"] = {
+        **theme.get("text_style", {}),
+        "fontWeight": 600,
+        "fontSize": 16,
     }
+    opt["tooltip"] = {
+        "trigger": "axis",
+        "axisPointer": {"type": "shadow"},
+        "formatter": _PIPELINE_HEALTH_TOOLTIP_FN,
+    }
+    opt["legend"] = {
+        "data": ["Before (god-class)", "After (refactored)"],
+        "top": 32,
+        "textStyle": theme.get("text_style", {}),
+    }
+    opt["grid"] = {"left": 50, "right": 30, "top": 80, "bottom": 50}
+    opt["xAxis"] = {
+        "type": "category",
+        "data": bar_labels,
+        "axisLabel": {
+            "color": theme.get("text_style", {}).get("color", "#c9d1d9"),
+            "interval": 0,
+            "fontSize": 11,
+            "formatter": _WRAP_XAXIS_FN,
+        },
+    }
+    opt["yAxis"] = {"type": "value", "show": False}
+    opt["color"] = ["#8b3a3a", "#56d364"]
+    opt["series"] = [
+        {
+            "name": "Before (god-class)",
+            "type": "bar",
+            "data": [
+                {"value": v, "metric": m} for v, m in zip(before_vals, metrics)
+            ],
+            "label": {
+                "show": True,
+                "position": "top",
+                "color": theme.get("text_style", {}).get("color", "#c9d1d9"),
+                "formatter": _LABEL_FN,
+            },
+            "emphasis": {"focus": "series"},
+        },
+        {
+            "name": "After (refactored)",
+            "type": "bar",
+            "data": [
+                {"value": v, "metric": m} for v, m in zip(after_vals, metrics)
+            ],
+            "label": {
+                "show": True,
+                "position": "top",
+                "color": theme.get("colors", {}).get("tech", "#56d364"),
+                "formatter": _LABEL_FN,
+            },
+            "emphasis": {"focus": "series"},
+        },
+    ]
+    return opt
 ```
+
+The `(metrics, theme)` signature matches the other 4 builders (`build_sunburst`, `build_streamgraph`, `build_network`, `build_sankey`) so the same `applyTheme()` invocation in `template.py:425` can update this dashboard on theme toggle.
 
 `_LABEL_FN`, `_PIPELINE_HEALTH_TOOLTIP_FN`, `_WRAP_XAXIS_FN` are **JS source strings** (constants exported from the same module) — they receive `params.value.metric` and return the formatted string per `metric.unit`.
 
@@ -388,7 +403,7 @@ In the page-init `<script>` block (right after `buildChart(...)` calls), add:
 // Toggle the hidden Module Dependency Graph on any bar click.
 window.__hrToggleDeepDive = function () {
   if (!window.Alpine) return;
-  const s = Alpine.store('global');
+  const s = Alpine.store('pipelineUi');
   s.showDeepDive = !s.showDeepDive;
   if (s.showDeepDive) {
     Alpine.nextTick(() => {
@@ -406,7 +421,7 @@ And add the Alpine store registration in the same init block:
 
 ```javascript
 document.addEventListener('alpine:init', () => {
-  Alpine.store('global', { showDeepDive: false });
+  Alpine.store('pipelineUi', { showDeepDive: false });
 });
 ```
 
@@ -452,15 +467,45 @@ The `static_charts.py` `build_refactor_bar` function is **no longer called** and
 def assemble_html(
     results_root: Path,
     module_graph_svg: str,
-    pipeline_health_dashboard_json: dict,   # NEW
-    refactor_stats: dict,                    # smaller, just test counts
+    pipeline_health_dashboard_json: dict,   # NEW (replaces refactor_dashboard_json)
+    refactor_stats: dict,                    # smaller: {test_before, test_after}
 ) -> str:
 ```
 
-Template render context: replace `refactor_dashboard_json` → `pipeline_health_dashboard_json`.
+**Removed keyword**: `refactor_bar_b64` (no longer needed — `build_refactor_bar` is gone, the new dashboard carries the metric visualization inline).
 
-### 6.3 Template wiring
+**Removed helper**: `_build_refactor_dashboard_data(refactor_stats: dict)` at `html_assembler.py:86-119` — its only consumer (the old `build_refactor_dashboard` call) is removed.
 
+**Template render context**: replace `refactor_dashboard_json` → `pipeline_health_dashboard_json`.
+
+**Call sites in `tests/test_visualization/test_html_assembler.py`** that must be updated (verified by grep):
+- Lines 8, 43: drop `build_refactor_bar` import and the `refactor_bar_b64=...` kwarg.
+- Line 71: assertion `"Engineering excellence" in html` → replace with `"Robust AI Pipeline Engineering" in html`.
+- Line 130: assertion `"x-data" in html and "showGraph" in html` → drop (the `x-data` wrapper is removed per §6.3 M4).
+- Lines 134-156 (`test_refactor_chart_inlined`): rename to `test_pipeline_health_chart_inlined`, update assertions to look for `"echarts-pipeline-health-dashboard"`, `"Stochastic-to-Deterministic Defense"`, `"Memory-Safe Streaming"`, `"Comprehensive Observability"`, and `"pipelineHealthDashboard"`.
+- ~28 `assemble_html(...)` call sites: drop the `refactor_bar_b64=...` kwarg everywhere it appears.
+
+### 6.3 Template wiring (M4 — must delete dead `x-data` and click-handler shim)
+
+`template.py` Section 4 currently has a `x-data="{ showGraph: false }"` wrapper and a `bindDashboardClickHandler()` JS function (lines 322, 509-530) that targets the OLD metric name "Architectural Decoupling" and pokes at `root._x_dataStack[0]` (an Alpine internal). The new design replaces both with a clean Alpine store + a single `chart.on('click', ...)` handler attached to the new dashboard.
+
+**Edits to `template.py`** (in addition to the §3.2 / §5.4 changes):
+- **Remove** the `x-data="{ showGraph: false }"` wrapper div around the ECharts container at line 322.
+- **Remove** the inner `<div x-show="showGraph" ...>` block at lines 330-338; replace with the new `x-show="$store.pipelineUi.showDeepDive"` block per §3.2.
+- **Remove** the `bindDashboardClickHandler()` function definition (lines 509-530) and its call from `DOMContentLoaded` (line 540).
+- **Replace** with a new click-binding step inside the existing `rebuildAllCharts()` function (or as a sibling function called once after the dashboard is initialized):
+  ```javascript
+  function bindPipelineHealthClickHandler() {
+    const el = document.getElementById('echarts-pipeline-health-dashboard');
+    if (!el || !window.__hrCharts['echarts-pipeline-health-dashboard']) return;
+    const chart = window.__hrCharts['echarts-pipeline-health-dashboard'];
+    chart.on('click', function () {           // any bar, any metric
+      window.__hrToggleDeepDive();
+    });
+  }
+  ```
+  And call `bindPipelineHealthClickHandler()` at the end of `rebuildAllCharts()`.
+- **Remove** the `window.__hrAppState = { showGraph: false };` declaration at line 415 (no longer needed — the new `Alpine.store('pipelineUi', ...)` replaces it).
 - Section 4 `<div id="echarts-pipeline-health-dashboard">` (renamed per §3.2).
 - The JS init block:
   ```javascript
@@ -476,11 +521,17 @@ Template render context: replace `refactor_dashboard_json` → `pipeline_health_
 |---|---|---|---|
 | New | `tests/test_visualization/test_pipeline_metrics.py` | 5 | `PipelineMetric` dataclass invariants, `ALL_STATIC_METRICS` shape, `TEST_COVERAGE_TEMPLATE` shape |
 | Updated | `tests/test_visualization/test_echarts.py` | `TestPipelineHealthDashboard` (8 tests) replaces `TestRefactorDashboard` | Title, X-axis, colors, hidden Y-axis, label formatter, tooltip formatter, metric-in-data, legend |
-| Updated | `tests/test_visualization/test_html_assembler.py` | 1 updated assertion | New key `pipeline_health_dashboard_json` |
+| Updated | `tests/test_visualization/test_html_assembler.py` | ~5–10 assertion edits (no method count change) | Drop `refactor_bar_b64` kwarg at 28 call sites, rename DOM id and narrative copy, drop `x-data`/`showGraph` assertion at line 130, replace "Engineering excellence" with "Robust AI Pipeline Engineering" at line 71 (per §6.2) |
 | Updated | `tests/test_visualization/test_static_charts.py` | drop `TestRefactorBar` tests; keep `TestModuleGraphSvg` | `build_refactor_bar` is removed |
 | Unchanged | `tests/test_visualization/test_module_graph.py` | n/a | AST discovery is reused as-is |
 
-**Total visualization test count delta**: roughly +5 (new metrics) +8 (new dashboard) −4 (old refactor bar) −? (old refactor dashboard, count TBD at implementation) = **net +9** tests.
+**Total visualization test count delta** (verified by source-file inspection):
+- `+5` new tests in `test_pipeline_metrics.py`
+- `+8` new tests in `TestPipelineHealthDashboard`
+- `−4` removed tests in `TestRefactorDashboard` (the old class, 4 methods)
+- `−2` removed tests in `TestBuildRefactorBar` (`test_static_charts.py:13-29`, 2 methods)
+- `~5–10` edits in `test_html_assembler.py` for renamed DOM id, kwargs, narrative copy (count varies by helper functions)
+- **Net delta**: +7 tests, with `test_html_assembler.py` accumulating assertion-only edits (no method count change).
 
 ---
 
@@ -491,9 +542,9 @@ Template render context: replace `refactor_dashboard_json` → `pipeline_health_
 | Hardcoded metric values drift from reality | Medium | Each `PipelineMetric.note` documents the original measurement method + date. Re-measurement is a manual `git grep` task; add a `docs/superpowers/specs/2026-06-19-section-4-metrics-recheck.md` follow-up. |
 | Hidden module graph renders at 0×0 on first reveal | Medium | `__hrToggleDeepDive` calls `Alpine.nextTick(() => echarts.getInstanceByDom(el).resize())` (per §5.4). Covered by manual test in 3 browsers (Chrome, Firefox, Safari). |
 | Bar labels overflow on narrow viewports | Low | X-axis `interval: 0` + label `formatter` wraps to 2 lines (`\n` between words) when the name > 18 chars. CSS `.engineering-layout-grid` collapses to 1 column at < 900px. |
-| Spec-card copy reads as hype / unverified | Low | Each claim cites a concrete artifact: `LLMResponseParseError` (real exception class), `TCFD_BATCH_WORKERS=8` (real config), `EvaluationRow.model_validate_json` (real Pydantic call), 329+ tests (auto-computed). |
+| Spec-card copy reads as hype / unverified | Low | Each claim cites a concrete artifact: `LLMResponseParseError` (real exception class in `src/tcfd_extractor/evaluation/exceptions.py:24`), `TCFD_BATCH_WORKERS=8` (real config in `src/tcfd_extractor/config.py:6`), `EvaluationResult.model_validate(...)` (real Pydantic call in `src/tcfd_extractor/evaluation/evaluator.py:69`), 329+ tests (auto-computed from pytest). |
 | Old `build_refactor_dashboard` reference leaks | Low | `grep` check in DoD: `rg "refactor_dashboard|refactor-bar" src/ tests/` must return 0 matches. |
-| Alpine store `global` collides with another library | Very Low | Scoped as `Alpine.store('global', ...)`; only consumed by `__hrToggleDeepDive`. No external script defines `window.Alpine.store.global`. |
+| Alpine store `pipelineUi` collides with another library | Low | Project-namespaced (`pipelineUi`, parallel to existing `hrApp`); only consumed by `__hrToggleDeepDive`. No external script defines `window.Alpine.store.pipelineUi`. |
 | "Before (god-class)" legend label is too informal | Low | Captures the truth of the story (it WAS a god class). If user prefers "Before (monolith)" / "After (modular)", it's a 1-line string change in §5.1. |
 
 ---
@@ -523,15 +574,18 @@ A task is "DONE" only when ALL of the following are true:
 - [ ] `tests/test_visualization/test_static_charts.py` no longer tests `build_refactor_bar`; `build_module_graph_svg` tests still pass
 - [ ] `template.py` Section 4 uses `id="echarts-pipeline-health-dashboard"`, 2-column `engineering-layout-grid`, 3 spec-cards with the exact copy from §3.2
 - [ ] CSS additions from §3.3 are present in the `<style>` block
-- [ ] `Alpine.store('global', { showDeepDive: false })` is registered on `alpine:init`
+- [ ] `Alpine.store('pipelineUi', { showDeepDive: false })` is registered on `alpine:init`
 - [ ] `window.__hrToggleDeepDive` is defined and uses `Alpine.nextTick` + `echarts.getInstanceByDom(el).resize()` (per §5.4)
+- [ ] **M4 (dead-code removal)**: `x-data="{ showGraph: false }"` wrapper div is removed from Section 4; `bindDashboardClickHandler()` function and its `DOMContentLoaded` call are removed; `window.__hrAppState = { showGraph: false }` declaration is removed
+- [ ] **M4 (new click handler)**: `bindPipelineHealthClickHandler()` is defined and called from `rebuildAllCharts()`; it attaches `chart.on('click', () => window.__hrToggleDeepDive())` to the new dashboard
 - [ ] `scripts/build_hr_report.py` calls the new builder, removes `build_refactor_bar` plumbing, passes `pipeline_health_dashboard_json`
-- [ ] `src/tcfd_extractor/visualization/html_assembler.py` accepts and renders the new dashboard JSON
-- [ ] `rg "refactor_dashboard|refactor-bar|build_refactor_bar|TestRefactorDashboard" src/ tests/ scripts/` returns 0 matches
+- [ ] `src/tcfd_extractor/visualization/html_assembler.py` accepts and renders the new dashboard JSON; `refactor_bar_b64` keyword and `_build_refactor_dashboard_data` helper are removed
+- [ ] `rg "refactor_dashboard|refactor-bar|build_refactor_bar|TestRefactorDashboard|__hrAppState|bindDashboardClickHandler" src/ tests/ scripts/` returns 0 matches
+- [ ] `rg "_build_refactor_dashboard_data" src/` returns 0 matches
 - [ ] `uv run pytest tests/test_visualization/ -v` passes
 - [ ] `python scripts/build_hr_report.py --output output/hr_report/` succeeds and `scripts/check_leakage.py` exits 0
-- [ ] Manual visual check (browser, dark mode): the 4 bars render with correct colors + labels; clicking any bar reveals the module graph; clicking again collapses it
-- [ ] No real company name appears anywhere in the new Section 4 copy or in `output/hr_report/index.html`
+- [ ] **SC-4 manual test** (cannot be automated in pytest without a Selenium harness): open `output/hr_report/index.html` in **3 browsers** (Chrome, Firefox, Safari). For each browser: (1) confirm 8 bars render with the correct colors (`#8b3a3a` for Before, `#56d364` for After) and per-bar labels; (2) click one bar from each of the 4 metric groups (total 4 clicks) and confirm the module graph (`#echarts-module-graph`) appears; (3) click the same bar again to confirm the graph collapses; (4) open DevTools, evaluate `echarts.getInstanceByDom(document.getElementById('echarts-module-graph'))` after the graph is revealed, and confirm a non-null ECharts instance is returned (proves the `resize()` call worked). Record results in `output/hr_report/BUILD_LOG.md` under "Section 4 manual test".
+- [ ] No real company name appears anywhere in the new Section 4 copy or in `output/hr_report/index.html` (verified by `scripts/check_leakage.py` exit 0)
 - [ ] `output/hr_report/index.html` is regenerated and the new Section 4 visually matches §3.2
 
 ---
@@ -548,3 +602,10 @@ A task is "DONE" only when ALL of the following are true:
 | Y-axis: shared numeric scale? | **No** — hidden; per-bar `label` shows formatted value with unit |
 | Hidden graph resize on Alpine reveal? | **Yes** — `Alpine.nextTick` + `echarts.resize()` |
 | Old `build_refactor_dashboard` removed or kept? | **Removed** (no parallel builder; single source of truth) |
+| ECharts builder signature? | `(metrics, theme)` to match other 4 builders and integrate with `applyTheme()`; uses `_get_base_option()` for theme inheritance |
+| Alpine store name? | **`pipelineUi`** (project-namespaced, parallel to `hrApp`) |
+| `refactor_bar_b64` kwarg on `assemble_html`? | **Removed** (the new dashboard carries the metric visualization inline) |
+| `_build_refactor_dashboard_data` helper in `html_assembler.py`? | **Removed** (its only consumer is gone) |
+| `x-data="{ showGraph: false }"` wrapper in `template.py`? | **Removed** (replaced by `Alpine.store('pipelineUi', ...)`) |
+| `bindDashboardClickHandler()` JS function? | **Removed and replaced** by `bindPipelineHealthClickHandler()` (any-bar click → `__hrToggleDeepDive`) |
+| `window.__hrAppState`? | **Removed** (replaced by `Alpine.store('pipelineUi', ...)`) |
