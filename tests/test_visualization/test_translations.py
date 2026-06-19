@@ -160,7 +160,6 @@ class TestNewDictionaryEntries:
         ("可拖拽节点", "Draggable nodes"), ("点击查看详情", "Click to view details"),
     ])
     def test_new_entry_exists(self, zh, en):
-        from tcfd_extractor.visualization.translations import KEYWORD_TRANSLATIONS
         assert zh in KEYWORD_TRANSLATIONS, f"missing dict entry for {zh!r}"
         assert KEYWORD_TRANSLATIONS[zh] == en
 
@@ -169,7 +168,6 @@ class TestTranslateUnifiedDoubleBrackets:
     """Spec §5.2: translate() 改用双中括号."""
 
     def test_translate_unknown_uses_double_brackets(self):
-        from tcfd_extractor.visualization.translations import translate
         result = translate("某未收录的术语")
         assert result == "[[ZH: 某未收录的术语]]"
         assert result.startswith("[[ZH:")
