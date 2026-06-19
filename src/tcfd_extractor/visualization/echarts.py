@@ -51,9 +51,14 @@ def _get_base_option(title: str, subtitle: str | None = None) -> dict:
 
     Stage 3 修复:
     - backgroundColor: "transparent" 让 chart canvas 与 dark page bg 融合
+
+    Stage 3.3 修复: 标题块 (title + subtext) 高度固定 50px, 用 itemGap 留出
+    title 和 subtext 之间的间距, 并预留 CHART_CONTENT_TOP (60px) 给上层
+    builder 用 grid/series.top, 避免标题和图表内容重叠。
     """
     base: dict[str, Any] = {
         "title": {"text": title, "left": "center", "top": 10,
+                  "itemGap": 4,  # title 和 subtext 之间的间距
                   "textStyle": TCFD_THEME_CONFIG["text_style"]},
         "tooltip": {"trigger": "item", **TCFD_THEME_CONFIG["tooltip_style"]},
         "color": [
@@ -71,6 +76,11 @@ def _get_base_option(title: str, subtitle: str | None = None) -> dict:
     return base
 
 
+# Stage 3.3: 标题块 (title + subtext) 高度 = 60px, 给上层 builder 参考
+CHART_CONTENT_TOP = 70  # 标题块结束位置 (留 10px 余量)
+CHART_CONTENT_BOTTOM = 20
+
+
 # builder 函数将在 Task 2.2-2.5 添加
 
 
@@ -79,6 +89,9 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
 
     Stage 3 修复: label.show=False (默认不显示), emphasis.label.show=True
     (鼠标悬停时显示英文内容)。
+
+    Stage 3.3 修复: 设置 series.top/bottom/left/right 显式避开标题块,
+    避免外圈压在标题文字上。
     """
     opt = _get_base_option(
         "TCFD Dimensions & Clusters",
@@ -88,6 +101,11 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
         "type": "sunburst",
         "data": data,
         "radius": ["10%", "90%"],
+        "center": ["50%", "55%"],  # 略偏下, 给标题留更多视觉空间
+        "top": CHART_CONTENT_TOP,
+        "bottom": CHART_CONTENT_BOTTOM,
+        "left": "5%",
+        "right": "5%",
         "label": {"show": False, "rotate": "tangential", "fontSize": 11,
                   "color": theme["text_style"]["color"]},
         "emphasis": {
@@ -107,18 +125,28 @@ def build_streamgraph(data: dict, theme: dict) -> dict:
     """Streamgraph: year × 3 dim stacked flow, dataZoom for zoom.
 
     Stage 3 修复: 每个 series label.show=False, emphasis 时显示 dim 名称。
+
+    Stage 3.3 修复:
+    - legend 移到 top:55 (在标题块下沿, 不与 subtext 重叠)
+    - grid.top 设为 90 (legend 下 + 留白), 避免曲线压在 legend/subtext 上
+    - grid.bottom 设 50 留给 dataZoom slider
     """
     opt = _get_base_option(
         "TCFD Disclosure Trend (2000-2024)",
         "Drag the slider to zoom into a time range"
     )
     # legend name 已经从 data["series"] 拿, 由 data_loader 翻译
-    opt["legend"] = {"top": 30, "data": [s["name"] for s in data["series"]]}
+    # Stage 3.3: legend top 从 30 调到 55, 在标题块 (高 60px) 下方
+    opt["legend"] = {"top": 55, "data": [s["name"] for s in data["series"]]}
     opt["xAxis"] = {"type": "category", "boundaryGap": False,
                     "data": data["years"]}
     opt["yAxis"] = {"type": "value"}
+    # Stage 3.3: 显式 grid 给标题/legend/dataZoom 留空间, 避免重叠
+    opt["grid"] = {"top": 90, "left": 60, "right": 30, "bottom": 50,
+                   "containLabel": True}
     opt["dataZoom"] = [
-        {"type": "slider", "xAxisIndex": 0, "start": 0, "end": 100},
+        {"type": "slider", "xAxisIndex": 0, "start": 0, "end": 100,
+         "bottom": 10},
         {"type": "inside", "xAxisIndex": 0},
     ]
     opt["series"] = []
@@ -144,6 +172,9 @@ def build_network(data: dict, theme: dict) -> dict:
 
     Stage 3 修复: label.show=False (默认不显示), emphasis.label.show=True
     (悬停节点时显示关键词名)。
+
+    Stage 3.3 修复: 显式设置 series.top/bottom/left/right, force-layout
+    节点限制在标题块下方, 避免最上面的节点压在 title/subtext 上。
     """
     opt = _get_base_option(
         "Keyword Co-occurrence Network (Recent 3 Years)",
@@ -174,6 +205,11 @@ def build_network(data: dict, theme: dict) -> dict:
         ],
         "roam": theme["global_roam"],
         "draggable": True,
+        # Stage 3.3: 限制绘图区在标题块下方
+        "top": CHART_CONTENT_TOP,
+        "bottom": CHART_CONTENT_BOTTOM,
+        "left": 20,
+        "right": 20,
         "force": {"repulsion": 80, "edgeLength": 50},
         "emphasis": {
             "focus": "adjacency",
@@ -198,6 +234,9 @@ def build_sankey(data: dict, theme: dict) -> dict:
     ECharts 当 template 渲染, 显示 "function(p) { const t = ..." 乱码)。
     节点名已经是 clean English ("Reports 2023" 等), ECharts 用默认 {b}
     template 直接显示节点名。
+
+    Stage 3.3 修复: top 从 60 微调到 70 (与 CHART_CONTENT_TOP 对齐),
+    保证标题块和图表内容不重叠。
     """
     opt = _get_base_option(
         "NLP Pipeline Data Refinement",
@@ -222,6 +261,7 @@ def build_sankey(data: dict, theme: dict) -> dict:
             "show": False,
             "fontSize": 10,
         },
-        "left": 20, "right": 100, "top": 60, "bottom": 20,
+        "left": 20, "right": 100,
+        "top": CHART_CONTENT_TOP, "bottom": CHART_CONTENT_BOTTOM,
     }]
     return opt

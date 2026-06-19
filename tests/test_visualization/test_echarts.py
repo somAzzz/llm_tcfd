@@ -324,3 +324,88 @@ class TestChartBackgroundMatchesDark:
         assert TCFD_THEME_CONFIG["colors"]["policy"] == "#58a6ff"
         assert TCFD_THEME_CONFIG["colors"]["market"] == "#f0883e"
         assert TCFD_THEME_CONFIG["colors"]["tech"] == "#56d364"
+
+
+class TestTitleDoesNotOverlapChartContent:
+    """Stage 3.3 修复: 4 个 chart 都必须保证标题块 (title + subtext) 不与
+    图表内容 (series/grid) 重叠。
+
+    标题块默认高度 ≈ 50px (title.top=10 + title 文字 ~18px + itemGap=4 +
+    subtext ~16px = ~48px), 所以 series.top 必须 ≥ 60px 才有视觉余量。
+    """
+
+    def test_title_block_height_is_respected_by_all_builders(self):
+        """所有 builder 的 series/grid.top 必须 ≥ 60, 避免与标题块重叠。"""
+        # Sunburst
+        data_sb = [{"name": "Policy", "children": [{"name": "A", "children": []}]}]
+        opt = build_sunburst(data_sb, TCFD_THEME_CONFIG)
+        assert opt["series"][0]["top"] >= 60, \
+            f"sunburst series.top={opt['series'][0]['top']} < 60, will overlap title"
+
+        # Streamgraph — 通过 grid.top 留空
+        data_sg = {"years": [2020], "series": [{"name": "Policy", "data": [1]}]}
+        opt = build_streamgraph(data_sg, TCFD_THEME_CONFIG)
+        assert opt["grid"]["top"] >= 60, \
+            f"streamgraph grid.top={opt['grid']['top']} < 60, will overlap title/legend"
+        # legend 必须在标题块下方
+        assert opt["legend"]["top"] >= 50, \
+            f"streamgraph legend.top={opt['legend']['top']} < 50, will overlap title block"
+
+        # Network — series.top
+        data_nw = {
+            "nodes": [{"id": "a", "name": "a", "symbolSize": 15, "category": "Policy", "value": 1}],
+            "links": [],
+        }
+        opt = build_network(data_nw, TCFD_THEME_CONFIG)
+        assert opt["series"][0]["top"] >= 60, \
+            f"network series.top={opt['series'][0]['top']} < 60, will overlap title"
+
+        # Sankey — series.top
+        data_sk = {"nodes": [{"name": "Reports 2023"}], "links": []}
+        opt = build_sankey(data_sk, TCFD_THEME_CONFIG)
+        assert opt["series"][0]["top"] >= 60, \
+            f"sankey series.top={opt['series'][0]['top']} < 60, will overlap title"
+
+    def test_base_option_title_itemGap_creates_spacing(self):
+        """title.itemGap 必须 > 0 让 title 和 subtext 之间有视觉间距。"""
+        opt = _get_base_option("T", "S")
+        assert opt["title"].get("itemGap", 0) > 0, \
+            "title.itemGap must be > 0 to separate title from subtext"
+
+    def test_streamgraph_legend_under_title_block(self):
+        """Streamgraph legend 必须在 subtext 下方 (top ≥ 50)。"""
+        data = {"years": [2020, 2021], "series": [
+            {"name": "Policy", "data": [1, 2]},
+            {"name": "Market", "data": [2, 3]},
+        ]}
+        opt = build_streamgraph(data, TCFD_THEME_CONFIG)
+        # title 块 (含 subtext) 高度 ≈ 50, legend 应在 ≥ 50 (留余量 ≥ 55)
+        assert opt["legend"]["top"] >= 55
+
+    def test_network_series_has_explicit_bounds(self):
+        """Network: force-layout 节点必须限制在标题块下方, 否则最上面的
+        节点会压在 title/subtext 上 (实际部署中曾发生)。
+        """
+        data = {
+            "nodes": [{"id": "a", "name": "a", "symbolSize": 15, "category": "Policy", "value": 1}],
+            "links": [],
+        }
+        opt = build_network(data, TCFD_THEME_CONFIG)
+        series = opt["series"][0]
+        for key in ("top", "bottom", "left", "right"):
+            assert key in series, f"network series missing explicit {key} bound (will overlap title)"
+        assert series["top"] >= 60
+
+    def test_sunburst_center_offset_below_title(self):
+        """Sunburst: 中心 y 必须略偏下 (center[1] > 50%), 视觉上不被标题压。"""
+        data = [{"name": "Policy", "children": [{"name": "A", "children": []}]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        center_y_pct = int(opt["series"][0]["center"][1].rstrip("%"))
+        assert center_y_pct >= 50, \
+            f"sunburst center y={center_y_pct}% should be >= 50% (lower) for title clearance"
+
+    def test_sankey_top_matches_other_charts(self):
+        """Sankey series.top 应该和 sunburst/network 一致, 都用 CHART_CONTENT_TOP=70。"""
+        opt = build_sankey({"nodes": [{"name": "x"}], "links": []}, TCFD_THEME_CONFIG)
+        # Stage 3.3: top 调到 70 给标题留更多视觉空间
+        assert opt["series"][0]["top"] == 70
