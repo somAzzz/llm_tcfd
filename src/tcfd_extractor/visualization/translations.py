@@ -1,6 +1,8 @@
 """Chinese → English translations for TCFD-related keywords."""
 from __future__ import annotations
 
+import re
+
 KEYWORD_TRANSLATIONS: dict[str, str] = {
     "气候变化": "Climate Change",
     "碳排放": "Carbon Emissions",
@@ -139,13 +141,52 @@ KEYWORD_TRANSLATIONS: dict[str, str] = {
     "联合国": "United Nations",
     "可持续发展目标": "SDGs",
     "TCFD": "TCFD",
+    # === Stage 2 additions (spec §5.2) ===
+    "无": "N/A",
+    "聚类A": "Cluster A",
+    "聚类B": "Cluster B",
+    "聚类C": "Cluster C",
+    "聚类D": "Cluster D",
+    "聚类E": "Cluster E",
+    "聚类F": "Cluster F",
+    "聚类G": "Cluster G",
+    "聚类H": "Cluster H",
+    "聚类I": "Cluster I",
+    "聚类J": "Cluster J",
+    "披露趋势": "Disclosure Trend",
+    "流水线": "Pipeline",
+    "数据提纯": "Data Refinement",
+    "分块": "Chunking",
+    "维度归类": "By Dimension",
+    "阶段1": "Stage 1",
+    "阶段2": "Stage 2",
+    "阶段3": "Stage 3",
+    "阶段4": "Stage 4",
+    "公司数": "Companies",
+    "披露数": "Disclosures",
+    "年份范围": "Years Covered",
+    "工程质量": "Engineering Quality",
+    "测试通过": "tests passing",
+    "工程": "Engineering",
+    "技术深度": "Tech Deep Dive",
+    "模块依赖图": "Module Dependency Graph",
+    "已构建": "Built",
+    "源代码按需索取": "Source available on request",
+    "数据已脱敏": "All data anonymized",
+    "构建中": "Under construction",
+    "刷新": "Refresh",
+    "加载失败": "Load failed",
+    "点击节点下钻": "Click a node to drill down",
+    "拖动滑块缩放": "Drag the slider to zoom",
+    "可拖拽节点": "Draggable nodes",
+    "点击查看详情": "Click to view details",
 }
 
 
 def translate(keyword_zh: str) -> str:
     if keyword_zh in KEYWORD_TRANSLATIONS:
         return KEYWORD_TRANSLATIONS[keyword_zh]
-    return f"[ZH: {keyword_zh}]"
+    return f"[[ZH: {keyword_zh}]]"  # 双中括号, 与 translate_smart 统一
 
 
 def is_translated(keyword_zh: str) -> bool:
@@ -154,3 +195,26 @@ def is_translated(keyword_zh: str) -> bool:
 
 def missing_translations_for(keywords: list[str]) -> list[str]:
     return sorted({k for k in keywords if not is_translated(k)})
+
+
+_NON_ALNUM_RE = re.compile(r"[^\w\s]+", re.UNICODE)
+
+
+def translate_smart(keyword: str) -> str:
+    """Smart translate with graceful fallback.
+
+    Spec §5.1:
+    1. Exact dict match → return English
+    2. Pure ASCII → return as-is (English term, no need to translate)
+    3. Mixed/Chinese → strip symbols, wrap as [[ZH: cleaned]]
+    """
+    if not keyword:
+        return keyword
+    if keyword in KEYWORD_TRANSLATIONS:
+        return KEYWORD_TRANSLATIONS[keyword]
+    if keyword.isascii():
+        return keyword
+    cleaned = _NON_ALNUM_RE.sub("", keyword).strip()
+    if not cleaned:
+        return keyword
+    return f"[[ZH: {cleaned}]]"

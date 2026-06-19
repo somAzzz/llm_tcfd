@@ -2,11 +2,14 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from tcfd_extractor.visualization.translations import (
     KEYWORD_TRANSLATIONS,
     translate,
     is_translated,
     missing_translations_for,
+    translate_smart,
 )
 
 
@@ -19,7 +22,8 @@ class TestTranslate:
     def test_unknown_keyword_returns_zh_marker(self):
         result = translate("某未知关键词")
         assert "某未知关键词" in result
-        assert result.startswith("[ZH:")
+        assert result.startswith("[[ZH:")
+        assert result.endswith("]]")
 
     def test_translate_exact_match(self):
         assert translate("碳交易") == "Carbon Trading"
@@ -106,3 +110,67 @@ class TestCoverageAgainstRealData:
         missing = missing_translations_for(high_freq)
         assert missing == [], f"High-freq keywords missing translations: {missing}"
         assert is_translated("碳交易")
+
+
+class TestTranslateSmart:
+    """Spec §5.1: translate_smart 4 路径."""
+
+    def test_exact_dict_match_returns_english(self):
+        assert translate_smart("碳交易") == "Carbon Trading"
+        assert translate_smart("低碳") == "Low-Carbon"
+        assert translate_smart("政策") == "Policy"
+
+    def test_pure_ascii_returns_as_is(self):
+        assert translate_smart("ESG") == "ESG"
+        assert translate_smart("TCFD") == "TCFD"
+        assert translate_smart("Carbon Neutrality") == "Carbon Neutrality"
+
+    def test_chinese_unmatched_wrapped_in_double_brackets(self):
+        result = translate_smart("某未收录的术语")
+        assert result == "[[ZH: 某未收录的术语]]"
+
+    def test_chinese_with_punctuation_strips_symbols(self):
+        assert translate_smart("某词!") == "[[ZH: 某词]]"
+        assert translate_smart("某词（测试）") == "[[ZH: 某词测试]]"
+
+    def test_empty_string_returns_empty(self):
+        assert translate_smart("") == ""
+
+
+class TestNewDictionaryEntries:
+    """Spec §5.2: 词典扩展."""
+
+    @pytest.mark.parametrize("zh,en", [
+        ("政策", "Policy"), ("市场", "Market"), ("技术", "Technology"), ("无", "N/A"),
+        ("聚类A", "Cluster A"), ("聚类B", "Cluster B"), ("聚类C", "Cluster C"),
+        ("聚类D", "Cluster D"), ("聚类E", "Cluster E"), ("聚类F", "Cluster F"),
+        ("聚类G", "Cluster G"), ("聚类H", "Cluster H"), ("聚类I", "Cluster I"),
+        ("聚类J", "Cluster J"),
+        ("披露", "Disclosure"), ("披露趋势", "Disclosure Trend"),
+        ("流水线", "Pipeline"), ("数据提纯", "Data Refinement"),
+        ("分块", "Chunking"), ("维度归类", "By Dimension"),
+        ("阶段1", "Stage 1"), ("阶段2", "Stage 2"), ("阶段3", "Stage 3"), ("阶段4", "Stage 4"),
+        ("公司数", "Companies"), ("披露数", "Disclosures"), ("年份范围", "Years Covered"),
+        ("工程质量", "Engineering Quality"), ("测试通过", "tests passing"),
+        ("项目", "Project"), ("工程", "Engineering"), ("技术深度", "Tech Deep Dive"),
+        ("模块依赖图", "Module Dependency Graph"), ("已构建", "Built"),
+        ("源代码按需索取", "Source available on request"), ("数据已脱敏", "All data anonymized"),
+        ("构建中", "Under construction"), ("刷新", "Refresh"), ("加载失败", "Load failed"),
+        ("点击节点下钻", "Click a node to drill down"), ("拖动滑块缩放", "Drag the slider to zoom"),
+        ("可拖拽节点", "Draggable nodes"), ("点击查看详情", "Click to view details"),
+    ])
+    def test_new_entry_exists(self, zh, en):
+        from tcfd_extractor.visualization.translations import KEYWORD_TRANSLATIONS
+        assert zh in KEYWORD_TRANSLATIONS, f"missing dict entry for {zh!r}"
+        assert KEYWORD_TRANSLATIONS[zh] == en
+
+
+class TestTranslateUnifiedDoubleBrackets:
+    """Spec §5.2: translate() 改用双中括号."""
+
+    def test_translate_unknown_uses_double_brackets(self):
+        from tcfd_extractor.visualization.translations import translate
+        result = translate("某未收录的术语")
+        assert result == "[[ZH: 某未收录的术语]]"
+        assert result.startswith("[[ZH:")
+        assert result.endswith("]]")
