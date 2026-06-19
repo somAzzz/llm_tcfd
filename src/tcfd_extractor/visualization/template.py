@@ -333,8 +333,7 @@ flowchart LR
       <div class="engineering-layout-grid">
         <div id="echarts-pipeline-health-dashboard"
              class="echarts-chart"
-             style="width:100%; height:380px; cursor: pointer;"
-             @click="window.__hrToggleDeepDive && window.__hrToggleDeepDive()"></div>
+             style="width:100%; height:380px;"></div>
 
         <div class="engineering-specs">
           <div class="spec-card">
