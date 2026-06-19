@@ -441,7 +441,10 @@ def build_pipeline_health_dashboard(
 
     opt = _get_base_option(
         "AI Pipeline Resilience & Engineering Health",
-        "Click any bar to view the module graph",
+        # No subtext: bar labels at position:"top" floated above tall bars and
+        # visually collided with the subtitle. The title alone is enough
+        # context; the click-to-view hint is implicit (the deep-dive panel
+        # appears on bar click).
     )
     opt["title"]["left"] = "center"
     opt["title"]["textStyle"] = {

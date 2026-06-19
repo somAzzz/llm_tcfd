@@ -663,6 +663,20 @@ class TestPipelineHealthDashboard:
         opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
         assert opt["title"]["text"] == "AI Pipeline Resilience & Engineering Health"
 
+    def test_no_subtext_to_avoid_bar_label_collision(self):
+        """Regression: bar labels at position:'top' float above tall bars and
+        visually collide with the chart's subtitle. We dropped the subtitle
+        ("Click any bar to view the module graph") so only the title sits
+        in the title block — the click hint is implicit (the deep-dive
+        panel appears on bar click).
+        """
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
+        assert "subtext" not in opt["title"], (
+            "Subtitle reintroduced — bars at position:'top' will collide "
+            "with it again. See git history for 22cf3e1 (the revert)."
+        )
+
     def test_x_axis_has_four_metric_names(self):
         from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
         opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
