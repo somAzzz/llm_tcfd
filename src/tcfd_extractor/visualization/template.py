@@ -368,7 +368,7 @@ flowchart LR
       <div x-show="$store.pipelineUi.showDeepDive" x-transition.opacity.duration.300ms
            style="margin-top: 1rem;">
         <h3 style="margin-top: 1rem; color: var(--accent);">
-          &#x1F9E9; Module Dependency Graph (click any bar to collapse)
+          &#x1F9E9; Module Dependency Graph
         </h3>
         <p>Hover a module to highlight its import dependencies.</p>
         <div id="echarts-module-graph" class="echarts-chart"
