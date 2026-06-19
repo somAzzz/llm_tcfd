@@ -77,8 +77,11 @@ def _get_base_option(title: str, subtitle: str | None = None) -> dict:
 
 
 # Stage 3.3: 标题块 (title + subtext) 高度 = 60px, 给上层 builder 参考
-CHART_CONTENT_TOP = 70  # 标题块结束位置 (留 10px 余量)
-CHART_CONTENT_BOTTOM = 20
+# Stage 3.3 调优: 实测 title(18px) + itemGap(4) + subtext(16px) + padding ≈ 50px,
+# 加上视觉舒适余量 → series.top 用 80, 防止 sunburst 外圈/network force
+# 最上面的节点 压到 subtext
+CHART_CONTENT_TOP = 80
+CHART_CONTENT_BOTTOM = 30
 
 
 # builder 函数将在 Task 2.2-2.5 添加
@@ -100,8 +103,9 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
     opt["series"] = [{
         "type": "sunburst",
         "data": data,
-        "radius": ["10%", "90%"],
-        "center": ["50%", "55%"],  # 略偏下, 给标题留更多视觉空间
+        # Stage 3.3 调优: 外圈从 90% 降到 85% + 中心偏下, 避免外圈压标题
+        "radius": ["10%", "85%"],
+        "center": ["50%", "55%"],
         "top": CHART_CONTENT_TOP,
         "bottom": CHART_CONTENT_BOTTOM,
         "left": "5%",
@@ -136,13 +140,14 @@ def build_streamgraph(data: dict, theme: dict) -> dict:
         "Drag the slider to zoom into a time range"
     )
     # legend name 已经从 data["series"] 拿, 由 data_loader 翻译
-    # Stage 3.3: legend top 从 30 调到 55, 在标题块 (高 60px) 下方
-    opt["legend"] = {"top": 55, "data": [s["name"] for s in data["series"]]}
+    # Stage 3.3 调优: legend top = 65, 与 CHART_CONTENT_TOP=80 协调
+    opt["legend"] = {"top": 65, "data": [s["name"] for s in data["series"]]}
     opt["xAxis"] = {"type": "category", "boundaryGap": False,
                     "data": data["years"]}
     opt["yAxis"] = {"type": "value"}
-    # Stage 3.3: 显式 grid 给标题/legend/dataZoom 留空间, 避免重叠
-    opt["grid"] = {"top": 90, "left": 60, "right": 30, "bottom": 50,
+    # Stage 3.3 调优: grid.top=100 给 legend 下沿留 10px, bottom=55 给
+    # dataZoom slider 留空间
+    opt["grid"] = {"top": 100, "left": 60, "right": 30, "bottom": 55,
                    "containLabel": True}
     opt["dataZoom"] = [
         {"type": "slider", "xAxisIndex": 0, "start": 0, "end": 100,

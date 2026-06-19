@@ -405,7 +405,26 @@ class TestTitleDoesNotOverlapChartContent:
             f"sunburst center y={center_y_pct}% should be >= 50% (lower) for title clearance"
 
     def test_sankey_top_matches_other_charts(self):
-        """Sankey series.top 应该和 sunburst/network 一致, 都用 CHART_CONTENT_TOP=70。"""
+        """Sankey series.top 应该和 sunburst/network 一致, 都用 CHART_CONTENT_TOP=80。"""
         opt = build_sankey({"nodes": [{"name": "x"}], "links": []}, TCFD_THEME_CONFIG)
-        # Stage 3.3: top 调到 70 给标题留更多视觉空间
-        assert opt["series"][0]["top"] == 70
+        # Stage 3.3 调优: top = 80 给标题留充足视觉余量
+        assert opt["series"][0]["top"] == 80
+
+    def test_sunburst_radius_reduced_to_avoid_title_overlap(self):
+        """Sunburst 外圈半径 ≤ 85%, 避免外圈边缘压到 subtext。"""
+        data = [{"name": "Policy", "children": [{"name": "A", "children": []}]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        radius_str = opt["series"][0]["radius"][1]
+        radius_pct = int(radius_str.rstrip("%"))
+        assert radius_pct <= 85, (
+            f"sunburst outer radius={radius_pct}% > 85%, outer ring will overlap title"
+        )
+
+    def test_streamgraph_grid_top_keeps_clearance_below_legend(self):
+        """Streamgraph grid.top 必须 > legend.top + 20, 避免曲线压到 legend。"""
+        data = {"years": [2020], "series": [{"name": "Policy", "data": [1]}]}
+        opt = build_streamgraph(data, TCFD_THEME_CONFIG)
+        assert opt["grid"]["top"] >= opt["legend"]["top"] + 25, (
+            f"grid.top={opt['grid']['top']} not enough below legend.top="
+            f"{opt['legend']['top']}; chart may overlap legend"
+        )
