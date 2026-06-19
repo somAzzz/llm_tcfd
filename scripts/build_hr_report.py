@@ -132,7 +132,7 @@ def main() -> int:
 
     readme = f"""# TCFD Project Demo
 
-**Live demo URL**: https://<username>.github.io/tcfd-hr-report/
+**Live demo URL**: https://somAzzz.github.io/tcfd-report/
 
 ## What's in this report
 
@@ -149,7 +149,7 @@ Open `index.html` in any modern browser. Loads Plotly and Mermaid from CDN.
 
 ## Deploying to GitHub Pages
 
-1. Create a new **public** repo: `tcfd-hr-report`
+1. Create a new **public** repo: `tcfd-report`
 2. Push: `index.html`, `README.md`, `.nojekyll`
 3. Settings → Pages → Branch: `main`, Folder: `/ (root)` → Save
 
