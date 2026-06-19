@@ -304,6 +304,11 @@ def load_sankey_data(eval_dir: Path,
                     chunk_per_report: int = 150) -> dict:
     """Sankey: 4 阶段流水线, 阶段 1/2/3 按 year 聚合 (避免节点爆炸)。
 
+    Stage 3.2 修复: 节点名直接用 clean English (e.g., "Reports 2023"),
+    不再用 `stage1_report_{year}` 前缀 — 旧 prefix 配合 JS string formatter
+    会让 ECharts 把 JS 源码当 template 渲染, 显示
+    "function(p) { const t = ..." 乱码。
+
     真实文件路径 (相对项目根):
         summary_csv = output/tcfd_keywords/tcfd_keywords_summary.csv
         eval_dir    = output/evaluate_cooccurrence/
@@ -314,8 +319,8 @@ def load_sankey_data(eval_dir: Path,
         chunk_per_report: 经验估算 (1 report ≈ 150 chunks, ±50% 误差)
 
     Returns:
-        {"nodes": [{"name": "stage1_report_2023"}, ...],
-         "links": [{"source": "...", "target": "...", "value": N}]}
+        {"nodes": [{"name": "Reports 2023"}, ...],
+         "links": [{"source": "Reports 2023", "target": "Chunks 2023", "value": N}]}
     """
     import csv as _csv
     import json as _json
@@ -357,13 +362,18 @@ def load_sankey_data(eval_dir: Path,
                     if k:
                         year_data[year][key].add(k)
     # 阶段 1/2/3 按 year 聚合 (75 节点 = 25 年 × 3 阶段)
+    # 节点名是 clean English, ECharts 默认 {b} template 直接渲染
+    # 阶段 4 dim 节点名: "Policy Keywords" / "Market Keywords" / "Technology Keywords"
+    stage4_display = {"policy": "Policy Keywords",
+                      "market": "Market Keywords",
+                      "tech": "Technology Keywords"}
     nodes: set[str] = set()
     links: list[dict] = []
     stage4_value: dict[str, int] = defaultdict(int)  # dim → total
     for year, data in year_data.items():
-        stage1_name = f"stage1_report_{year}"
-        stage2_name = f"stage2_chunk_{year}"
-        stage3_name = f"stage3_disclosure_{year}"
+        stage1_name = f"Reports {year}"
+        stage2_name = f"Chunks {year}"
+        stage3_name = f"Disclosures {year}"
         nodes.update([stage1_name, stage2_name, stage3_name])
         # 阶段 1 → 2: report_count × chunk_per_report (估算)
         links.append({
@@ -388,7 +398,7 @@ def load_sankey_data(eval_dir: Path,
         for dim_en in ("policy", "market", "tech"):
             kw_set = data[dim_en]
             if kw_set:
-                stage4_name = f"stage4_dim_{dim_en}"
+                stage4_name = stage4_display[dim_en]
                 value = len(kw_set)
                 links.append({
                     "source": stage3_name, "target": stage4_name, "value": value,

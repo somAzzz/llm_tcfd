@@ -419,9 +419,11 @@ flowchart LR
             contexts: contexts,
           });
         } else if (chartId === 'echarts-sankey' && params.dataType === 'edge') {
-          const stripPrefix = s => (s || '').replace(/^stage\d+_/, '');
-          const source = stripPrefix(params.data.source);
-          const target = stripPrefix(params.data.target);
+          // Stage 3.2 修复: 节点名是 clean English ("Reports 2023" 等),
+          // 不再用 stage{N}_ prefix (旧 prefix 触发了 formatter → ECharts 把
+          // JS 源码当 template 渲染)。所以这里也不再需要 stripPrefix。
+          const source = params.data.source;
+          const target = params.data.target;
           // 关键: 与 build_context_index 保持一致 — 排序后的 a->b 字符串
           const pair = [source, target].sort();
           const edgeKey = `${pair[0]}->${pair[1]}`;

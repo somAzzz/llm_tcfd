@@ -261,6 +261,9 @@ def test_load_sankey_data_aggregates_by_year_not_company_year(tmp_path):
 
     真实文件路径硬编码为 output/tcfd_keywords/tcfd_keywords_summary.csv。
     阶段 1/2/3 按年聚合 (25 年 × 3 阶段 = 75 节点), 阶段 4 合并为 3 节点。
+
+    Stage 3.2 修复: 节点名为 clean English ("Reports 2023" 等), 不再用
+    stage{N}_ 前缀 (原 prefix 触发了 formatter → ECharts 把 JS 源码当 template 渲染)。
     """
     import os
     from tcfd_extractor.visualization.data_loader import load_sankey_data
@@ -285,17 +288,19 @@ def test_load_sankey_data_aggregates_by_year_not_company_year(tmp_path):
 
     result = load_sankey_data(eval_dir=tmp_path / "output" / "evaluate_cooccurrence")
 
-    # 所有节点都有 stage{N}_ 前缀
+    # 节点名是 clean English (e.g., "Reports 2023"), 不用 stage{N}_ 前缀
     for n in result["nodes"]:
-        assert n["name"].startswith("stage"), f"node {n['name']} missing stage prefix"
-    # 阶段 1/2/3 节点 ≤ 3 年 × 3 阶段 = 9 (不是 1001 × 3 = 3003)
+        assert not n["name"].startswith("stage"), (
+            f"node {n['name']} still uses stage prefix — should be clean English"
+        )
+    # 阶段 1/2/3 节点 ≤ 2 年 × 3 阶段 = 6 (不是 1001 × 3 = 3003)
+    stage123_keywords = {"Reports", "Chunks", "Disclosures"}
     stage123 = [n for n in result["nodes"]
-                if n["name"].startswith("stage1_")
-                or n["name"].startswith("stage2_")
-                or n["name"].startswith("stage3_")]
-    assert len(stage123) <= 9, f"too many stage1-3 nodes: {len(stage123)}"
-    # stage4 节点 ≤ 3 (合并)
-    stage4 = [n for n in result["nodes"] if n["name"].startswith("stage4_")]
+                if any(n["name"].startswith(f"{kw} ") for kw in stage123_keywords)]
+    assert len(stage123) <= 6, f"too many stage1-3 nodes: {len(stage123)}"
+    # stage4 节点 ≤ 3 (合并为 Policy/Market/Technology Keywords)
+    stage4_keywords = {"Policy Keywords", "Market Keywords", "Technology Keywords"}
+    stage4 = [n for n in result["nodes"] if n["name"] in stage4_keywords]
     assert len(stage4) <= 3
 
 
@@ -317,8 +322,53 @@ def test_load_sankey_data_handles_utf8_bom_in_csv(tmp_path):
     )
     result = load_sankey_data(eval_dir=tmp_path / "output" / "evaluate_cooccurrence")
     assert len(result["nodes"]) > 0, "BOM CSV should still parse, got empty nodes"
-    # 应该产出 3 个 stage1/2/3 节点 (1 年 × 3 阶段)
+    # 应该产出 3 个 stage1/2/3 节点 (1 年 × 3 阶段) — clean English names
+    stage123_keywords = {"Reports", "Chunks", "Disclosures"}
     stage123 = [n for n in result["nodes"]
-                if n["name"].startswith("stage1_") or n["name"].startswith("stage2_")
-                or n["name"].startswith("stage3_")]
+                if any(n["name"].startswith(f"{kw} ") for kw in stage123_keywords)]
     assert len(stage123) == 3, f"expected 3 stage1-3 nodes for year 2023, got {len(stage123)}"
+    # 节点名应包含年份 2023
+    assert any("2023" in n["name"] for n in result["nodes"])
+
+
+def test_load_sankey_data_uses_clean_english_node_names(tmp_path):
+    """Stage 3.2 修复: sankey 节点名是 clean English, ECharts 默认 {b} 直接显示。
+
+    旧实现: `stage1_report_2023` + JS string formatter → ECharts 把 JS 源码当
+    template string 渲染 (display: "function(p) { const t = ...").
+    新实现: `Reports 2023` 等 clean English name + 无 formatter → ECharts 显示节点名。
+    """
+    import os
+    from tcfd_extractor.visualization.data_loader import load_sankey_data
+    os.chdir(tmp_path)
+    (tmp_path / "output" / "tcfd_keywords").mkdir(parents=True)
+    summary_csv = tmp_path / "output" / "tcfd_keywords" / "tcfd_keywords_summary.csv"
+    summary_csv.write_text(
+        '年报,政策维度,市场维度,技术维度\n'
+        '万科A-2023年年度报告.txt,"碳达峰,碳中和","绿色信贷","余热余能"\n',
+        encoding="utf-8"
+    )
+    (tmp_path / "output" / "evaluate_cooccurrence" / "2023").mkdir(parents=True)
+    (tmp_path / "output" / "evaluate_cooccurrence" / "2023" / "results.jsonl").write_text(
+        '{"is_tcfd_related": true}\n', encoding="utf-8"
+    )
+    result = load_sankey_data(eval_dir=tmp_path / "output" / "evaluate_cooccurrence")
+    node_names = {n["name"] for n in result["nodes"]}
+
+    # 4 类节点: Reports/Chunks/Disclosures + 3 dim Keywords
+    assert "Reports 2023" in node_names
+    assert "Chunks 2023" in node_names
+    assert "Disclosures 2023" in node_names
+    assert "Policy Keywords" in node_names
+    assert "Market Keywords" in node_names
+    assert "Technology Keywords" in node_names
+
+    # 没有任何 stage{N}_ 前缀残留
+    for name in node_names:
+        assert not name.startswith("stage"), f"residual stage prefix: {name!r}"
+
+    # 没有中文节点名 (避免 [[ZH: ...]] 之类的翻译 fallback 出现在 tooltip)
+    for name in node_names:
+        assert not any('\u4e00' <= c <= '\u9fff' for c in name), (
+            f"Chinese char in node name: {name!r}"
+        )

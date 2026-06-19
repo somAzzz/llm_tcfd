@@ -39,12 +39,10 @@ TCFD_THEME_CONFIG: dict[str, Any] = {
     "global_roam": True,
     "animation": True,
     "animation_duration": 600,
-    "sankey_label_formatter": (
-        "function(p) {"
-        "  const t = window.__hrTranslate || (s => s);"
-        "  return t(p.name.replace(/^stage\\d+_/, ''));"
-        "}"
-    ),
+    # Stage 3.2 修复: sankey_label_formatter 已移除 — load_sankey_data 现在
+    # 直接产出 clean English 节点名 (e.g., "Reports 2023"), ECharts 用默认
+    # {b} template 渲染节点名。旧实现把 JS 源码塞进 formatter 字符串, ECharts
+    # 当 template 渲染, 显示 "function(p) { const t = ..." 乱码。
 }
 
 
@@ -191,10 +189,15 @@ def build_network(data: dict, theme: dict) -> dict:
 
 
 def build_sankey(data: dict, theme: dict) -> dict:
-    """Sankey: 4-stage pipeline, namespace prefix on nodes.
+    """Sankey: 4-stage pipeline, clean English node names.
 
     Stage 3 修复: 节点 label (label) + 边 label (edgeLabel) 都默认隐藏,
-    鼠标悬停时 ECharts 通过 emphasis 自动显示 (formatter 仍生效)。
+    鼠标悬停时 ECharts 通过 emphasis 自动显示。
+
+    Stage 3.2 修复: 不再用 formatter (旧实现把 JS 源码塞进 formatter 字符串,
+    ECharts 当 template 渲染, 显示 "function(p) { const t = ..." 乱码)。
+    节点名已经是 clean English ("Reports 2023" 等), ECharts 用默认 {b}
+    template 直接显示节点名。
     """
     opt = _get_base_option(
         "NLP Pipeline Data Refinement",
@@ -212,13 +215,11 @@ def build_sankey(data: dict, theme: dict) -> dict:
         "lineStyle": {"color": "gradient", "curveness": 0.5},
         "label": {
             "show": False,
-            "formatter": theme["sankey_label_formatter"],
             "fontSize": 11,
         },
         # 边 (link) 上的 label — 默认隐藏, 悬停显示
         "edgeLabel": {
             "show": False,
-            "formatter": theme["sankey_label_formatter"],
             "fontSize": 10,
         },
         "left": 20, "right": 100, "top": 60, "bottom": 20,

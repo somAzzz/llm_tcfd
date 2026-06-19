@@ -18,7 +18,7 @@ def test_tcfd_theme_config_has_required_keys():
     """主题配置必备字段存在。"""
     required = ["colors", "font", "text_style", "tooltip_style",
                 "global_roam", "animation", "animation_duration",
-                "sankey_label_formatter"]
+                "chart_background"]
     for key in required:
         assert key in TCFD_THEME_CONFIG, f"missing key: {key}"
 
@@ -30,10 +30,15 @@ def test_tcfd_theme_colors_are_hex():
         assert c.startswith("#") and len(c) == 7, f"{dim} color {c} not hex"
 
 
-def test_tcfd_theme_sankey_formatter_strips_stage_prefix():
-    """Sankey formatter 必须能剥离 stage{N}_ 前缀。"""
-    fmt = TCFD_THEME_CONFIG["sankey_label_formatter"]
-    assert "stage\\d+_" in fmt, "formatter must contain stage prefix regex"
+def test_tcfd_theme_no_sankey_formatter_field():
+    """Stage 3.2 修复: sankey_label_formatter 已移除 — 用 clean English 节点名 + 默认 {b}。
+
+    旧实现把 JS 源码塞进 formatter 字符串, ECharts 把它当 template 渲染,
+    显示 "function(p) { const t = ..." 这种乱码。
+    """
+    assert "sankey_label_formatter" not in TCFD_THEME_CONFIG, (
+        "sankey_label_formatter should be removed; use clean English node names + default {b}"
+    )
 
 
 def test_get_base_option_returns_skeleton():
@@ -108,27 +113,35 @@ def test_build_network_returns_force_graph_with_unique_ids():
     assert nodes_by_id["词C"]["symbolSize"] == 60
 
 
-def test_build_sankey_returns_sankey_with_namespace_prefix():
-    """Sankey builder: type='sankey', 节点都有 stage{N}_ 前缀, formatter 剥离。"""
+def test_build_sankey_returns_sankey_with_clean_english_names():
+    """Sankey builder: type='sankey', 节点是 clean English 名 (无 stage{N}_ 前缀)。
+
+    Stage 3.2 修复: 节点名直接是 "Reports 2023" 等 clean English, ECharts 用
+    默认 {b} template 直接显示节点名 — 不再用 JS string formatter (旧实现
+    把 JS 源码塞进 formatter 字符串, ECharts 当 template 渲染出乱码)。
+    """
     data = {
         "nodes": [
-            {"name": "stage1_report_万科A_2023"},
-            {"name": "stage2_chunk_万科A_2023"},
-            {"name": "stage3_disclosure_万科A_2023"},
-            {"name": "stage4_dim_policy"},
+            {"name": "Reports 2023"},
+            {"name": "Chunks 2023"},
+            {"name": "Disclosures 2023"},
+            {"name": "Policy Keywords"},
         ],
         "links": [
-            {"source": "stage1_report_万科A_2023", "target": "stage2_chunk_万科A_2023", "value": 150},
-            {"source": "stage2_chunk_万科A_2023", "target": "stage3_disclosure_万科A_2023", "value": 27},
-            {"source": "stage3_disclosure_万科A_2023", "target": "stage4_dim_policy", "value": 2},
+            {"source": "Reports 2023", "target": "Chunks 2023", "value": 150},
+            {"source": "Chunks 2023", "target": "Disclosures 2023", "value": 27},
+            {"source": "Disclosures 2023", "target": "Policy Keywords", "value": 2},
         ],
     }
     opt = build_sankey(data, TCFD_THEME_CONFIG)
     assert opt["series"][0]["type"] == "sankey"
     for n in opt["series"][0]["nodes"]:
-        assert n["name"].startswith("stage")
-    # formatter 来自 TCFD_THEME_CONFIG
-    assert "stage\\d+_" in opt["series"][0]["label"]["formatter"]
+        assert not n["name"].startswith("stage"), (
+            f"node {n['name']} still uses stage prefix — should be clean English"
+        )
+    # 无 formatter 字段 (用 ECharts 默认 {b} template)
+    assert "formatter" not in opt["series"][0]["label"]
+    assert "formatter" not in opt["series"][0]["edgeLabel"]
 
 
 class TestTranslateHelper:
@@ -176,12 +189,6 @@ class TestDarkThemePalette:
     def test_tooltip_text_color_is_white_for_dark(self):
         # 暗色默认下 tooltip 文字白色
         assert TCFD_THEME_CONFIG["tooltip_style"]["textStyle"]["color"] == "#fff"
-
-    def test_sankey_formatter_uses_client_translator(self):
-        """Sankey formatter 走 window.__hrTranslate 客户端兜底。"""
-        fmt = TCFD_THEME_CONFIG["sankey_label_formatter"]
-        assert "window.__hrTranslate" in fmt
-        assert "stage\\d+_" in fmt  # 仍剥离 stage{N}_ 前缀
 
 
 def _has_no_cjk(s: str) -> bool:
