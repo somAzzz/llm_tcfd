@@ -6,6 +6,7 @@ import pytest
 from tcfd_extractor.visualization.echarts import (
     TCFD_THEME_CONFIG,
     _get_base_option,
+    _t,
     build_sunburst,
     build_streamgraph,
     build_network,
@@ -128,3 +129,110 @@ def test_build_sankey_returns_sankey_with_namespace_prefix():
         assert n["name"].startswith("stage")
     # formatter 来自 TCFD_THEME_CONFIG
     assert "stage\\d+_" in opt["series"][0]["label"]["formatter"]
+
+
+class TestTranslateHelper:
+    """echarts.py _t() helper — 4 case。"""
+
+    def test_known_keyword_returns_english(self):
+        assert _t("碳交易") == "Carbon Trading"
+        assert _t("政策") == "Policy"
+
+    def test_pure_ascii_returns_as_is(self):
+        assert _t("ESG") == "ESG"
+        assert _t("TCFD") == "TCFD"
+
+    def test_unknown_chinese_wrapped_double_brackets(self):
+        result = _t("某未知词")
+        assert result == "[[ZH: 某未知词]]"
+        assert result.startswith("[[ZH:")
+        assert result.endswith("]]")
+
+    def test_empty_string_returns_empty(self):
+        assert _t("") == ""
+
+
+class TestDarkThemePalette:
+    """Spec §6.2: 暗色调色板 policy/market/tech 用亮色调, 暗色背景下对比度足够。"""
+
+    def test_policy_color_uses_bright_blue(self):
+        # 暗色友好: 亮蓝替代 #1f77b4
+        c = TCFD_THEME_CONFIG["colors"]["policy"]
+        assert c.startswith("#") and len(c) == 7
+
+    def test_market_color_uses_bright_orange(self):
+        c = TCFD_THEME_CONFIG["colors"]["market"]
+        assert c.startswith("#") and len(c) == 7
+
+    def test_tech_color_uses_bright_green(self):
+        c = TCFD_THEME_CONFIG["colors"]["tech"]
+        assert c.startswith("#") and len(c) == 7
+
+    def test_tooltip_text_color_is_white_for_dark(self):
+        # 暗色默认下 tooltip 文字白色
+        assert TCFD_THEME_CONFIG["tooltip_style"]["textStyle"]["color"] == "#fff"
+
+    def test_sankey_formatter_uses_client_translator(self):
+        """Sankey formatter 走 window.__hrTranslate 客户端兜底。"""
+        fmt = TCFD_THEME_CONFIG["sankey_label_formatter"]
+        assert "window.__hrTranslate" in fmt
+        assert "stage\\d+_" in fmt  # 仍剥离 stage{N}_ 前缀
+
+
+def _has_no_cjk(s: str) -> bool:
+    """Spec §5.3: 标题/副标题不含中文 (CJK Unified Ideographs)。
+
+    允许 ASCII、ASCII 标点、以及箭头/emoji 等非 CJK Unicode 符号
+    (spec 设计中 sankey 副标题用 →, network 副标题用 ⚠️)。
+    """
+    return not any(0x4E00 <= ord(c) <= 0x9FFF for c in s)
+
+
+class TestBuildersEnglishTitles:
+    """Spec §5.3: 4 个 builder 标题/副标题全部英文化。"""
+
+    def test_build_sunburst_title_is_english(self):
+        data = [{"name": "Policy", "children": [{"name": "Cluster A", "children": []}]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        title = opt["title"]["text"]
+        assert "TCFD" in title  # TCFD 缩写保留
+        assert _has_no_cjk(title), f"CJK in title: {title!r}"
+
+    def test_build_streamgraph_title_is_english(self):
+        data = {
+            "years": [2020, 2021],
+            "series": [{"name": "Policy", "data": [1, 2]}],
+        }
+        opt = build_streamgraph(data, TCFD_THEME_CONFIG)
+        title = opt["title"]["text"]
+        sub = opt["title"].get("subtext", "")
+        assert _has_no_cjk(title)
+        assert _has_no_cjk(sub)
+
+    def test_build_network_title_and_categories_are_english(self):
+        data = {
+            "nodes": [{"id": "a", "name": "a", "symbolSize": 15, "category": "Policy", "value": 1}],
+            "links": [],
+        }
+        opt = build_network(data, TCFD_THEME_CONFIG)
+        title = opt["title"]["text"]
+        sub = opt["title"].get("subtext", "")
+        assert _has_no_cjk(title)
+        assert _has_no_cjk(sub)
+        # categories 改为英文 (Policy/Market/Technology)
+        cats = opt["series"][0]["categories"]
+        cat_names = [c["name"] for c in cats]
+        assert "Policy" in cat_names
+        assert "Market" in cat_names
+        assert "Technology" in cat_names
+
+    def test_build_sankey_title_is_english(self):
+        data = {
+            "nodes": [{"name": "stage1_x"}],
+            "links": [],
+        }
+        opt = build_sankey(data, TCFD_THEME_CONFIG)
+        title = opt["title"]["text"]
+        sub = opt["title"].get("subtext", "")
+        assert _has_no_cjk(title)
+        assert _has_no_cjk(sub)

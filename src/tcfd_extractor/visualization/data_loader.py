@@ -8,6 +8,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from .translations import translate
+
 logger = logging.getLogger(__name__)
 
 _YEAR_DIR_RE = re.compile(r"^\d{4}$")
@@ -258,7 +260,7 @@ def load_network_data(eval_dir: Path, years: list[int],
         nodes.append({
             "id": kw, "name": kw,
             "symbolSize": size,
-            "category": node_dim.get(kw, "无"),
+            "category": translate(node_dim.get(kw, "无")),
             "value": node_freq[kw],
         })
     # 边列表
