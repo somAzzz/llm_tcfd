@@ -21,9 +21,12 @@ def _t(keyword: str) -> str:
 # 单点改动: Stage 2 视觉升级仅改此处
 TCFD_THEME_CONFIG: dict[str, Any] = {
     "colors": {
-        "policy": "#58a6ff",   # 暗色下用亮蓝 (替代 #1f77b4)
-        "market": "#f0883e",   # 暗色下用亮橙 (替代 #ff7f0e)
-        "tech":   "#56d364",   # 暗色下用亮绿 (替代 #2ca02c)
+        # Stage 4 round 3 调亮: dim 层半径占比 5%→12% 后, 这 3 色作为最内圈
+        # 直接对眼睛, 需要比 cluster 环 (alpha=0.4) 和外圈 (深蓝) 都更亮更饱和
+        # 用户反馈: "最内层的 tech, policy, market 颜色有点暗"
+        "policy": "#79c0ff",   # Stage 4 r3: #58a6ff → #79c0ff (更亮的天蓝)
+        "market": "#ffa657",   # Stage 4 r3: #f0883e → #ffa657 (更亮的琥珀)
+        "tech":   "#7ee787",   # Stage 4 r3: #56d364 → #7ee787 (更亮的嫩绿)
         "neutral": ["#8b95a1", "#6c757d", "#484f58"],
     },
     # Stage 3 修复: chart canvas 透明, 与 dark page bg (#0f1419) 融合
@@ -122,8 +125,10 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
     opt["series"] = [{
         "type": "sunburst",
         "data": data,
-        # Stage 3.3 调优: 外圈从 90% 降到 85% + 中心偏下, 避免外圈压标题
-        "radius": ["10%", "85%"],
+        # Stage 4 round 3 调优: 最内圈 (dim 层) 半径 10% → 15%, 让 Policy/Market/Technology
+        # 3 色的视觉占比更大, 不再被压成窄环显得暗淡。cluster/keyword 层相应被压窄
+        # (从 75% 总宽 → 70%), 但 3 层仍然清晰可分。
+        "radius": ["15%", "85%"],
         "center": ["50%", "55%"],
         "top": CHART_CONTENT_TOP,
         "bottom": CHART_CONTENT_BOTTOM,

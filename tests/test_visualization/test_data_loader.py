@@ -201,14 +201,18 @@ def test_load_sunburst_translates_realistic_chinese_math_labels(tmp_path):
 
 def test_load_sunburst_data_injects_dim_color_inheritance_per_cluster(tmp_path):
     """Stage 4 颜色继承: 每个 cluster 节点必须有 itemStyle.color,
-    继承父辈 dim 的颜色 (Policy=#58a6ff → rgba 半透明, Market=#f0883e → ...,
-    Technology=#56d364 → ...) 让 cluster 层视觉上是父辈色的淡化过渡,
+    继承父辈 dim 的颜色 (Policy=#79c0ff → rgba 半透明, Market=#ffa657 → ...,
+    Technology=#7ee787 → ...) 让 cluster 层视觉上是父辈色的淡化过渡,
     而非通铺死灰。
+
+    Stage 4 round 3: dim 颜色从 TCFD_THEME_CONFIG 派生 (而非硬编码),
+    所以这里也用 echarts.TCFD_THEME_CONFIG 期望值保持一致。
 
     实现: load_sunburst_data 给每个 cluster 节点注入
     itemStyle.color = rgba(R, G, B, 0.4), alpha=0.4 让它与炭黑背景叠加。
     """
     from tcfd_extractor.visualization.data_loader import load_sunburst_data
+    from tcfd_extractor.visualization.echarts import TCFD_THEME_CONFIG
     clusters_dir = tmp_path / "phase5_category_mapping"
     clusters_dir.mkdir()
     # 每个 dim 各一个 cluster
@@ -227,10 +231,14 @@ def test_load_sunburst_data_injects_dim_color_inheritance_per_cluster(tmp_path):
     # 3 个 dim 各对应一个 cluster, 都必须有 itemStyle.color
     import re as _re
     rgba_re = _re.compile(r"^rgba\(\d+,\s*\d+,\s*\d+,\s*[\d.]+\)$")
+    # 从 TCFD_THEME_CONFIG 派生期望值 (Stage 4 r3 改为 #79c0ff / #ffa657 / #7ee787)
+    def _hex_to_rgba(hex_color, alpha=0.4):
+        h = hex_color.lstrip("#")
+        return f"rgba({int(h[0:2], 16)}, {int(h[2:4], 16)}, {int(h[4:6], 16)}, {alpha})"
     expected_colors = {
-        "Policy": "rgba(88, 166, 255, 0.4)",   # #58a6ff
-        "Market": "rgba(240, 136, 62, 0.4)",   # #f0883e
-        "Technology": "rgba(86, 211, 100, 0.4)",  # #56d364
+        "Policy": _hex_to_rgba(TCFD_THEME_CONFIG["colors"]["policy"]),
+        "Market": _hex_to_rgba(TCFD_THEME_CONFIG["colors"]["market"]),
+        "Technology": _hex_to_rgba(TCFD_THEME_CONFIG["colors"]["tech"]),
     }
     for dim_name, expected_color in expected_colors.items():
         dim = next(d for d in result if d["name"] == dim_name)

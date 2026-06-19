@@ -131,7 +131,7 @@ def _chart_translate(s: str) -> str:
     return KEYWORD_TRANSLATIONS.get(s, s)
 
 
-def load_sunburst_data(clusters_dir: Path) -> list[dict]:
+def load_sunburst_data(clusters_dir: Path, theme: dict | None = None) -> list[dict]:
     """Sunburst 数据: 3 维 → 聚类 → 关键词 三层树 (全部英文化)。
 
     真实 cluster JSON 格式: 顶层 list, 每项 {cluster_id, keywords, size, math_label}
@@ -140,23 +140,35 @@ def load_sunburst_data(clusters_dir: Path) -> list[dict]:
     Stage 3 修复: dim/cluster/keyword 名称全部走 translate_smart(), 不可翻译的
     中文 fallback 到 "Cluster {cluster_id}" (避免 [[ZH: ...]] 出现在 tooltip)。
 
+    Stage 4 round 3 修复: dim 颜色从 TCFD_THEME_CONFIG["colors"] 派生, 不再硬编码。
+    旧版用 #58a6ff / #f0883e / #56d364 写死, 改 Theme 时 cluster 颜色不会同步更新。
+    新版接受可选 theme 参数, 默认从 echarts.TCFD_THEME_CONFIG 读取。
+    这样 Stage 4 r3 把 dim 颜色调到 #79c0ff / #ffa657 / #7ee787 后, cluster 继承色
+    会自动跟随 (rgba(121, 192, 255, 0.4) 等), 不会出现两层颜色割裂。
+
     Args:
         clusters_dir: 含 {政策维度,市场维度,技术维度}_clusters.json 的目录
+        theme: 可选, 主题配置 dict (含 colors.policy/market/tech 字段);
+               默认从 echarts.TCFD_THEME_CONFIG 导入
 
     Returns:
         list of {name, children: [{name, children: [{name, value}]}]}
     """
     import json as _json
+    # 延迟导入避免循环依赖 (data_loader 会被 echarts 间接引用)
+    if theme is None:
+        from .echarts import TCFD_THEME_CONFIG
+        theme = TCFD_THEME_CONFIG
     # 文件名用 "维度" 后缀, 显示名直接用英文 (translation 走 translate_smart 兜底)
-    # Stage 4 颜色继承: 每个 dim 关联一个 hex 色, cluster 层用 alpha=0.4 的 rgba
+    # Stage 4 颜色继承: dim 颜色从 theme 派生, cluster 层用 alpha=0.4 的 rgba
     # 视觉流向: dim 亮色 → cluster 半透明过渡 → keyword 深蓝收尾
     dim_files = [
-        ("政策维度", "Policy", "#58a6ff"),
-        ("市场维度", "Market", "#f0883e"),
-        ("技术维度", "Technology", "#56d364"),
+        ("政策维度", "Policy", theme["colors"]["policy"]),
+        ("市场维度", "Market", theme["colors"]["market"]),
+        ("技术维度", "Technology", theme["colors"]["tech"]),
     ]
     # 把 hex 转成 rgba(alpha=0.4) — 与炭黑背景叠加形成"沉淀感"过渡色
-    # 例: #58a6ff → rgba(88, 166, 255, 0.4)
+    # 例: #79c0ff → rgba(121, 192, 255, 0.4)
     def _hex_to_rgba(hex_color: str, alpha: float = 0.4) -> str:
         h = hex_color.lstrip("#")
         r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)

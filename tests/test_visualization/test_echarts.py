@@ -166,25 +166,31 @@ class TestTranslateHelper:
 
 
 class TestDarkThemePalette:
-    """Spec §6.2: 暗色调色板 policy/market/tech 用亮色调, 暗色背景下对比度足够。"""
+    """Spec §6.2: 暗色调色板 policy/market/tech 用亮色调, 暗色背景下对比度足够。
+
+    Stage 4 round 3 调亮: 用户反馈 "最内层的 tech, policy, market 颜色有点暗",
+    dim 圈 (level 1) 半径从 10% 扩到 15% 后, 这 3 色直接对眼睛, 需要更亮。
+    旧值 (#58a6ff / #f0883e / #56d364) → 新值 (#79c0ff / #ffa657 / #7ee787),
+    与 GitHub Primer 调色板的 accent 亮色对齐, RGB 通道整体 +30~40。
+    """
 
     def test_policy_color_uses_bright_blue(self):
-        # 暗色友好: 亮蓝替代 #1f77b4
-        assert TCFD_THEME_CONFIG["colors"]["policy"] == "#58a6ff"
+        # 暗色友好: 亮蓝替代 #1f77b4, Stage 4 r3 又调亮
+        assert TCFD_THEME_CONFIG["colors"]["policy"] == "#79c0ff"
 
     def test_market_color_uses_bright_orange(self):
-        # 暗色友好: 亮橙替代 #ff7f0e
-        assert TCFD_THEME_CONFIG["colors"]["market"] == "#f0883e"
+        # 暗色友好: 亮橙替代 #ff7f0e, Stage 4 r3 又调亮
+        assert TCFD_THEME_CONFIG["colors"]["market"] == "#ffa657"
 
     def test_tech_color_uses_bright_green(self):
-        # 暗色友好: 亮绿替代 #2ca02c
-        assert TCFD_THEME_CONFIG["colors"]["tech"] == "#56d364"
+        # 暗色友好: 亮绿替代 #2ca02c, Stage 4 r3 又调亮
+        assert TCFD_THEME_CONFIG["colors"]["tech"] == "#7ee787"
 
     def test_palette_uses_dark_friendly_bright_colors(self):
-        """Spec §6.2: 暗色背景下用亮色调 (替代 Stage 1 暗色调)."""
-        assert TCFD_THEME_CONFIG["colors"]["policy"] == "#58a6ff"
-        assert TCFD_THEME_CONFIG["colors"]["market"] == "#f0883e"
-        assert TCFD_THEME_CONFIG["colors"]["tech"] == "#56d364"
+        """Spec §6.2 + Stage 4 r3: 暗色背景下用更亮色调, 让最内圈显眼。"""
+        assert TCFD_THEME_CONFIG["colors"]["policy"] == "#79c0ff"
+        assert TCFD_THEME_CONFIG["colors"]["market"] == "#ffa657"
+        assert TCFD_THEME_CONFIG["colors"]["tech"] == "#7ee787"
 
     def test_tooltip_text_color_is_white_for_dark(self):
         # 暗色默认下 tooltip 文字白色
@@ -320,10 +326,12 @@ class TestChartBackgroundMatchesDark:
         assert TCFD_THEME_CONFIG["chart_background"] == "transparent"
 
     def test_palette_uses_dark_friendly_bright_colors(self):
-        """暗色背景下 3 维颜色用亮色 (policy/market/tech), 保持 Stage 2 调色板。"""
-        assert TCFD_THEME_CONFIG["colors"]["policy"] == "#58a6ff"
-        assert TCFD_THEME_CONFIG["colors"]["market"] == "#f0883e"
-        assert TCFD_THEME_CONFIG["colors"]["tech"] == "#56d364"
+        """暗色背景下 3 维颜色用亮色 (policy/market/tech), 保持 Stage 2 调色板。
+        Stage 4 r3: 又调亮一档 (#79c0ff / #ffa657 / #7ee787) 让最内圈显眼。
+        """
+        assert TCFD_THEME_CONFIG["colors"]["policy"] == "#79c0ff"
+        assert TCFD_THEME_CONFIG["colors"]["market"] == "#ffa657"
+        assert TCFD_THEME_CONFIG["colors"]["tech"] == "#7ee787"
 
 
 class TestTitleDoesNotOverlapChartContent:
@@ -594,3 +602,40 @@ class TestSunburstOutermostRingDarkBlue:
                 "color should come from per-node itemStyle injected by load_sunburst_data. "
                 f"Got: {cluster_level}"
             )
+
+    def test_sunburst_inner_radius_enlarged_for_dim_visibility(self):
+        """Stage 4 round 3 调优: 最内圈 dim 层半径从 10% → 15%,
+        让 Policy/Market/Technology 3 色的视觉占比更大, 不再被压成窄环显得暗淡。
+
+        旧 radius=["10%", "85%"] (5% 宽) → 新 radius=["15%", "85%"] (10% 宽)。
+        """
+        data = [{"name": "Policy", "children": [
+            {"name": "Cluster A", "children": [{"name": "kw1", "value": 1}]}
+        ]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        inner_radius = int(opt["series"][0]["radius"][0].rstrip("%"))
+        assert inner_radius >= 15, (
+            f"sunburst inner radius={inner_radius}% must be ≥ 15% "
+            "(Stage 4 r3: enlarged from 10% to 15% for dim ring visibility)"
+        )
+
+    def test_sunburst_dim_colors_use_primed_bright_palette(self):
+        """Stage 4 round 3 调亮: dim 颜色用 #79c0ff / #ffa657 / #7ee787
+        (GitHub Primer accent 调色板), 比旧值 #58a6ff / #f0883e / #56d364 整体
+        RGB 通道 +30~40, 暗色背景下不再显得暗淡。
+        """
+        data = [{"name": "Policy", "children": [
+            {"name": "Cluster A", "children": [{"name": "kw1", "value": 1}]}
+        ]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        dim_colors = opt["series"][0]["levels"][1]["itemStyle"]["color"]
+        # 必须用新的亮色调色板
+        assert "#79c0ff" in dim_colors, (
+            f"Policy dim color must be #79c0ff (Stage 4 r3 bright), got: {dim_colors}"
+        )
+        assert "#ffa657" in dim_colors, (
+            f"Market dim color must be #ffa657 (Stage 4 r3 bright), got: {dim_colors}"
+        )
+        assert "#7ee787" in dim_colors, (
+            f"Technology dim color must be #7ee787 (Stage 4 r3 bright), got: {dim_colors}"
+        )
