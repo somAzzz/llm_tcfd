@@ -106,6 +106,11 @@ def assemble_html(
 ) -> str:
     """Load data, build charts, render template. Returns final HTML string.
 
+    Stage 5: 新增 pipeline_health_dashboard (4 个 PipelineMetric) 和
+    module_graph (AST 发现的依赖图) 两个 ECharts option, 取代静态 PNG。
+    `pipeline_metrics` 默认为 None → assembler 用 ALL_STATIC_METRICS 拼 3 个
+    静态指标 + 从 refactor_stats.test_before/after 构造 Test Coverage。
+
     Stage 2: 注入 __hrTranslateMap (全量 KEYWORD_TRANSLATIONS) 和
     __hrContextIndex (节点 + sankey 边 → context 列表, 限 3 sample)。
     """

@@ -2,6 +2,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from tcfd_extractor.visualization.html_assembler import assemble_html
 from tcfd_extractor.visualization.static_charts import build_module_graph_svg
 
@@ -249,3 +251,53 @@ class TestStage2TemplateContent:
         assert "hr-side-panel" in html
         assert "z-index: 1000" in html
         assert "hr-side-panel-backdrop" in html
+
+
+class TestDataclassDefaultEncoder:
+    """_dataclass_default JSON encoder: serialize PipelineMetric instances
+    that build_pipeline_health_dashboard embeds in bar data."""
+
+    def test_serializes_dataclass_to_dict(self):
+        from dataclasses import dataclass
+        from tcfd_extractor.visualization.html_assembler import _dataclass_default
+
+        @dataclass
+        class Point:
+            x: int
+            y: int
+
+        result = _dataclass_default(Point(3, 4))
+        assert result == {"x": 3, "y": 4}
+
+    def test_rejects_non_dataclass(self):
+        from tcfd_extractor.visualization.html_assembler import _dataclass_default
+
+        with pytest.raises(TypeError):
+            _dataclass_default("not a dataclass")
+
+    def test_serializes_real_pipeline_metric(self):
+        """The full path: build_pipeline_health_dashboard embeds PipelineMetric
+        in bar data, which json.dumps must serialize via _dataclass_default."""
+        import json as _json
+        from tcfd_extractor.visualization.html_assembler import _dataclass_default
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        from tcfd_extractor.visualization.pipeline_metrics import (
+            ALL_STATIC_METRICS, TEST_COVERAGE_TEMPLATE, PipelineMetric,
+        )
+
+        test_coverage = PipelineMetric(
+            name=TEST_COVERAGE_TEMPLATE.name,
+            unit=TEST_COVERAGE_TEMPLATE.unit,
+            before=16,
+            after=329,
+            note=TEST_COVERAGE_TEMPLATE.note,
+        )
+        metrics = (*ALL_STATIC_METRICS, test_coverage)
+        opt = build_pipeline_health_dashboard(metrics, {"text_style": {"color": "#fff"}, "colors": {"tech": "#0f0"}})
+
+        # Without the encoder, this would raise TypeError on the PipelineMetric instances.
+        json_str = _json.dumps(opt, default=_dataclass_default)
+        parsed = _json.loads(json_str)
+        # First bar's metric should be a dict with all dataclass fields
+        assert parsed["series"][0]["data"][0]["metric"]["name"] == "Memory Footprint"
+        assert parsed["series"][0]["data"][0]["metric"]["unit"] == "GB"
