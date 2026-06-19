@@ -132,6 +132,90 @@ class TestAssembleHtml:
         assert "data:image/png;base64,iVBORw" in html
 
 
+class TestBuildContextIndex:
+    """Spec §8: build_context_index — 关键词索引 / sankey 边索引 / 3 sample cap。"""
+
+    def _make_results(self, tmp_path: Path) -> Path:
+        base = tmp_path / "evaluate_cooccurrence"
+        year_dir = base / "2023"
+        year_dir.mkdir(parents=True)
+        records = []
+        # 同一关键词 4 次出现, 应 cap 到 3 条
+        for i in range(4):
+            records.append({
+                "file": f"x{i}.md", "keyword_a": "碳交易", "keyword_b": "低碳",
+                "context": f"ctx {i}", "is_tcfd_related": True, "dimension": "政策",
+            })
+        # 第二组, 另一对
+        records.append({
+            "file": "y.md", "keyword_a": "环保", "keyword_b": "碳市场",
+            "context": "ctx env", "is_tcfd_related": True, "dimension": "市场",
+        })
+        # 不相关 → 不进索引
+        records.append({
+            "file": "z.md", "keyword_a": "x", "keyword_b": "y",
+            "context": "ctx", "is_tcfd_related": False, "dimension": "无",
+        })
+        (year_dir / "results.jsonl").write_text(
+            "\n".join(json.dumps(r, ensure_ascii=False) for r in records),
+            encoding="utf-8",
+        )
+        return base
+
+    def test_keywords_index_caps_at_3_samples(self, tmp_path):
+        from tcfd_extractor.visualization.html_assembler import build_context_index
+        results = self._make_results(tmp_path)
+        index = build_context_index(eval_dir=results, years=[2023])
+        # 碳交易/低碳 4 条 → cap 到 3
+        assert len(index["keywords"]["碳交易"]) == 3
+        assert len(index["keywords"]["低碳"]) == 3
+
+    def test_sankey_index_uses_sorted_edge_key(self, tmp_path):
+        from tcfd_extractor.visualization.html_assembler import build_context_index
+        results = self._make_results(tmp_path)
+        index = build_context_index(eval_dir=results, years=[2023])
+        # sankey 边 key: 排序后的 a->b
+        # 注: sorted(["碳交易", "低碳"]) == ["低碳", "碳交易"] 因为 "低"(U+4F4E) < "碳"(U+78B3)
+        assert "低碳->碳交易" in index["sankey"]
+        assert "碳交易->低碳" not in index["sankey"]  # 只存正序
+        # 第二组: 环保 ↔ 碳市场
+        assert "环保->碳市场" in index["sankey"]
+        assert "碳市场->环保" not in index["sankey"]
+
+    def test_unrelated_records_excluded(self, tmp_path):
+        from tcfd_extractor.visualization.html_assembler import build_context_index
+        results = self._make_results(tmp_path)
+        index = build_context_index(eval_dir=results, years=[2023])
+        # is_tcfd_related=False 的 x/y 不进索引
+        assert "x" not in index["keywords"]
+        assert "y" not in index["keywords"]
+
+
+class TestContextInjection:
+    """Spec §5.3 + §8: 注入 window.__hrTranslateMap 和 window.__hrContextIndex。"""
+
+    def test_translate_map_injected(self, tmp_path):
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            refactor_bar_b64="x",
+            module_graph_svg="<svg></svg>",
+        )
+        assert "window.__hrTranslateMap" in html
+        # 含已知英文
+        assert "Carbon Trading" in html
+        assert "Policy" in html
+
+    def test_context_index_injected(self, tmp_path):
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            refactor_bar_b64="x",
+            module_graph_svg="<svg></svg>",
+        )
+        assert "window.__hrContextIndex" in html
+
+
 class TestStage2TemplateContent:
     """Spec §11 集成测试: Inter 字体 + Alpine + 暗色默认 + 侧栏。"""
 
