@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json as _json
+import logging
 from datetime import date
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from .data_loader import (
     load_network_data,
@@ -52,7 +55,9 @@ def assemble_html(
     # 若数据缺失则降级为占位 option, 不阻塞 HTML 渲染
     try:
         sankey_opt = build_sankey(load_sankey_data(eval_dir=eval_dir), TCFD_THEME_CONFIG)
-    except (FileNotFoundError, KeyError):
+    except (FileNotFoundError, KeyError, ValueError) as e:
+        logger.warning("Sankey: load_sankey_data failed (%s: %s), rendering empty sankey",
+                       type(e).__name__, e)
         sankey_opt = {"series": [{"type": "sankey", "data": [], "links": []}]}
 
     # 4 个 option 序列化为 JSON 字符串 (template 用 {{ xxx_json|safe }} 接收)

@@ -257,3 +257,28 @@ def test_load_sankey_data_aggregates_by_year_not_company_year(tmp_path):
     # stage4 节点 ≤ 3 (合并)
     stage4 = [n for n in result["nodes"] if n["name"].startswith("stage4_")]
     assert len(stage4) <= 3
+
+
+def test_load_sankey_data_handles_utf8_bom_in_csv(tmp_path):
+    """Regression: 真实 summary.csv 有 UTF-8 BOM, encoding 必须用 utf-8-sig。"""
+    import os
+    from tcfd_extractor.visualization.data_loader import load_sankey_data
+    os.chdir(tmp_path)
+    (tmp_path / "output" / "tcfd_keywords").mkdir(parents=True)
+    # 写带 BOM 的 CSV (模拟真实文件, 文件名含 "年年度报告.txt" 才能被 parser 接受)
+    summary_csv = tmp_path / "output" / "tcfd_keywords" / "tcfd_keywords_summary.csv"
+    with summary_csv.open("wb") as f:
+        f.write(b"\xef\xbb\xbf")  # UTF-8 BOM
+        f.write('年报,政策维度,市场维度,技术维度\n'.encode("utf-8"))
+        f.write('万科A-2023年年度报告.txt,"碳达峰,碳中和","绿色信贷","余热余能"\n'.encode("utf-8"))
+    (tmp_path / "output" / "evaluate_cooccurrence" / "2023").mkdir(parents=True)
+    (tmp_path / "output" / "evaluate_cooccurrence" / "2023" / "results.jsonl").write_text(
+        '{"is_tcfd_related": true}\n', encoding="utf-8"
+    )
+    result = load_sankey_data(eval_dir=tmp_path / "output" / "evaluate_cooccurrence")
+    assert len(result["nodes"]) > 0, "BOM CSV should still parse, got empty nodes"
+    # 应该产出 3 个 stage1/2/3 节点 (1 年 × 3 阶段)
+    stage123 = [n for n in result["nodes"]
+                if n["name"].startswith("stage1_") or n["name"].startswith("stage2_")
+                or n["name"].startswith("stage3_")]
+    assert len(stage123) == 3, f"expected 3 stage1-3 nodes for year 2023, got {len(stage123)}"

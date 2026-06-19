@@ -290,11 +290,16 @@ def load_sankey_data(eval_dir: Path,
     if summary_csv is None:
         summary_csv = Path("output/tcfd_keywords/tcfd_keywords_summary.csv")
     # 读 summary.csv, 按 year 聚合 (不按 company-year, 避免节点爆炸)
+    # 用 utf-8-sig 自动剥离 UTF-8 BOM (真实文件以 BOM 开头)
     year_data: dict[int, dict] = {}  # {year: {report_count, policy_keywords, market_keywords, tech_keywords}}
-    with summary_csv.open(encoding="utf-8") as f:
+    with summary_csv.open(encoding="utf-8-sig") as f:
         reader = _csv.DictReader(f)
         for row in reader:
-            fn = row["年报"]
+            # 防御: 若 BOM 未被剥 (encoding 配错), 找第一个 key
+            fn = row.get("年报") or row.get("\ufeff年报") or next(iter(row.values()), "")
+            if not fn:
+                logger.warning("Sankey: CSV row missing filename, skipping")
+                continue
             # 真实格式: {company_id}-{company_name}-{year}年年度报告.txt
             # 例: 000629-攀钢钢钒-2008年年度报告.txt
             # 倒数第 2 个 "-" 后面是年份
