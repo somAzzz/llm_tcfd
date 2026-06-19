@@ -23,7 +23,9 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       const map = window.__hrTranslateMap || {};
       if (map[kw]) return map[kw];
       if (/^[\x00-\x7F]+$/.test(kw)) return kw;
-      return '[[ZH: ' + kw.replace(/[^\w\s]+/g, '').trim() + ']]';
+      const stripped = kw.replace(/[^\w\s]+/g, '').trim();
+      if (!stripped) return kw;
+      return '[[ZH: ' + stripped + ']]';
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
@@ -166,6 +168,21 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     }
     @media (max-width: 700px) {
       .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    }
+    /* Side panel slide transitions (Alpine x-transition) */
+    .hr-slide-in {
+      animation: hr-slide-from-right 0.25s ease-out;
+    }
+    .hr-slide-out {
+      animation: hr-slide-to-right 0.25s ease-in;
+    }
+    @keyframes hr-slide-from-right {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+    @keyframes hr-slide-to-right {
+      from { transform: translateX(0); }
+      to { transform: translateX(100%); }
     }
   </style>
 </head>
@@ -387,10 +404,14 @@ flowchart LR
     }
 
     function bindClickHandlers(chart, chartId) {
+      const _contextsFor = function(key, source) {
+        const idx = (window.__hrContextIndex && window.__hrContextIndex[source]) || {};
+        return (idx[key] || []).slice(0, 3);
+      };
       chart.on('click', function(params) {
         if (chartId === 'echarts-network' && params.dataType === 'node') {
           const kw = params.data.name;
-          const contexts = (window.__hrContextIndex.keywords[kw] || []).slice(0, 3);
+          const contexts = _contextsFor(kw, 'keywords');
           window.Alpine.store('hrApp').openPanel({
             type: 'node',
             title: window.__hrTranslate(kw),
@@ -404,7 +425,7 @@ flowchart LR
           // 关键: 与 build_context_index 保持一致 — 排序后的 a->b 字符串
           const pair = [source, target].sort();
           const edgeKey = `${pair[0]}->${pair[1]}`;
-          const contexts = (window.__hrContextIndex.sankey[edgeKey] || []).slice(0, 3);
+          const contexts = _contextsFor(edgeKey, 'sankey');
           window.Alpine.store('hrApp').openPanel({
             type: 'link',
             title: `${window.__hrTranslate(source)} → ${window.__hrTranslate(target)}`,
