@@ -154,11 +154,47 @@ def test_load_sunburst_data_returns_3_dim_tree(tmp_path):
     result = load_sunburst_data(clusters_dir)
 
     assert len(result) == 3  # 3 个 dim 根
-    assert result[0]["name"] == "政策"
+    # Stage 3 修复: dim/cluster/keyword 全部英文化
+    assert result[0]["name"] == "Policy"
+    assert result[1]["name"] == "Market"
+    assert result[2]["name"] == "Technology"
     assert len(result[0]["children"]) == 2  # 政策有 2 聚类
-    assert result[0]["children"][0]["name"] == "聚类A"  # math_label 字段
+    # 聚类名 (math_label) 翻译为英文
+    assert result[0]["children"][0]["name"] == "Cluster A"
+    assert result[0]["children"][1]["name"] == "Cluster B"
+    assert result[1]["children"][0]["name"] == "Cluster C"
+    # 关键词也翻译
+    assert result[0]["children"][0]["children"][0]["name"] == "词1"  # 不在 dict, 保留原文
     # 技术维度 children 应为空列表 (cluster 空)
     assert result[2]["children"] == []
+
+
+def test_load_sunburst_translates_realistic_chinese_math_labels(tmp_path):
+    """Stage 3 修复: 真实 cluster JSON 的 math_label 是描述性中文 (e.g. 排放限值),
+    不在 KEYWORD_TRANSLATIONS, 应 fallback 到 'Cluster {id}' 而不是 [[ZH: ...]]。
+    """
+    from tcfd_extractor.visualization.data_loader import load_sunburst_data
+    clusters_dir = tmp_path / "phase5_category_mapping"
+    clusters_dir.mkdir()
+    (clusters_dir / "政策维度_clusters.json").write_text(json.dumps([
+        {"cluster_id": 0, "math_label": "排放限值", "keywords": ["VOCs"], "size": 1},
+        {"cluster_id": 1, "math_label": "节能减排", "keywords": ["节能"], "size": 1},
+        {"cluster_id": 2, "math_label": "未知中文标签XYZ", "keywords": ["x"], "size": 1},
+    ], ensure_ascii=False))
+    (clusters_dir / "市场维度_clusters.json").write_text(json.dumps([], ensure_ascii=False))
+    (clusters_dir / "技术维度_clusters.json").write_text(json.dumps([], ensure_ascii=False))
+
+    result = load_sunburst_data(clusters_dir)
+
+    # 节能减排 在 dict 中 → "Energy Saving & Emission Reduction"
+    cluster_names = [c["name"] for c in result[0]["children"]]
+    assert "Energy Saving & Emission Reduction" in cluster_names
+    # 不在 dict 的中文 → fallback "Cluster {id}"
+    assert "Cluster 0" in cluster_names  # 排放限值 未在 dict
+    assert "Cluster 2" in cluster_names  # 未知中文标签XYZ
+    # 不能有 [[ZH: ...]] wrapper
+    for c in cluster_names:
+        assert not c.startswith("[[ZH:"), f"untranslated Chinese: {c!r}"
 
 
 def test_load_streamgraph_data_aggregates_dimension_per_year(tmp_path):
@@ -181,8 +217,12 @@ def test_load_streamgraph_data_aggregates_dimension_per_year(tmp_path):
 
     assert result["years"] == [2020, 2021]
     assert len(result["series"]) == 3  # 3 个 dim
-    policy_series = next(s for s in result["series"] if s["name"] == "政策")
+    # Stage 3 修复: dim 名称英文化
+    policy_series = next(s for s in result["series"] if s["name"] == "Policy")
     assert policy_series["data"] == [5, 7]
+    # 所有 dim 都是英文
+    series_names = {s["name"] for s in result["series"]}
+    assert series_names == {"Policy", "Market", "Technology"}
 
 
 def test_load_network_data_dedupes_and_clamps_symbol_size(tmp_path):

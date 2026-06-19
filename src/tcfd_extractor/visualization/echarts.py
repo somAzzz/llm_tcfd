@@ -26,6 +26,8 @@ TCFD_THEME_CONFIG: dict[str, Any] = {
         "tech":   "#56d364",   # 暗色下用亮绿 (替代 #2ca02c)
         "neutral": ["#8b95a1", "#6c757d", "#484f58"],
     },
+    # Stage 3 修复: chart canvas 透明, 与 dark page bg (#0f1419) 融合
+    "chart_background": "transparent",
     "font": "Inter, 'Helvetica Neue', -apple-system, sans-serif",
     "text_style": {"fontFamily": "Inter", "color": "#e6e6e6"},  # 暗色默认
     "tooltip_style": {
@@ -47,7 +49,11 @@ TCFD_THEME_CONFIG: dict[str, Any] = {
 
 
 def _get_base_option(title: str, subtitle: str | None = None) -> dict:
-    """返回 ECharts option 公共骨架, 注入全局 textStyle/tooltip/color。"""
+    """返回 ECharts option 公共骨架, 注入全局 textStyle/tooltip/color/background。
+
+    Stage 3 修复:
+    - backgroundColor: "transparent" 让 chart canvas 与 dark page bg 融合
+    """
     base: dict[str, Any] = {
         "title": {"text": title, "left": "center", "top": 10,
                   "textStyle": TCFD_THEME_CONFIG["text_style"]},
@@ -57,6 +63,7 @@ def _get_base_option(title: str, subtitle: str | None = None) -> dict:
             TCFD_THEME_CONFIG["colors"]["market"],
             TCFD_THEME_CONFIG["colors"]["tech"],
         ] + TCFD_THEME_CONFIG["colors"]["neutral"],
+        "backgroundColor": TCFD_THEME_CONFIG["chart_background"],
         "textStyle": TCFD_THEME_CONFIG["text_style"],
         "animation": TCFD_THEME_CONFIG["animation"],
         "animationDuration": TCFD_THEME_CONFIG["animation_duration"],
@@ -70,7 +77,11 @@ def _get_base_option(title: str, subtitle: str | None = None) -> dict:
 
 
 def build_sunburst(data: list[dict], theme: dict) -> dict:
-    """Sunburst: 3 dim → cluster → keyword 3-level tree."""
+    """Sunburst: 3 dim → cluster → keyword 3-level tree.
+
+    Stage 3 修复: label.show=False (默认不显示), emphasis.label.show=True
+    (鼠标悬停时显示英文内容)。
+    """
     opt = _get_base_option(
         "TCFD Dimensions & Clusters",
         "Click a node to drill down"
@@ -79,9 +90,13 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
         "type": "sunburst",
         "data": data,
         "radius": ["10%", "90%"],
-        "label": {"rotate": "tangential", "fontSize": 11,
+        "label": {"show": False, "rotate": "tangential", "fontSize": 11,
                   "color": theme["text_style"]["color"]},
-        "emphasis": {"focus": "ancestor"},
+        "emphasis": {
+            "focus": "ancestor",
+            "label": {"show": True, "rotate": "tangential", "fontSize": 12,
+                      "color": "#fff"},
+        },
         "nodeClick": "zoomToNode",
         "sort": None,
         "animation": theme["animation"],
@@ -91,7 +106,10 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
 
 
 def build_streamgraph(data: dict, theme: dict) -> dict:
-    """Streamgraph: year × 3 dim stacked flow, dataZoom for zoom."""
+    """Streamgraph: year × 3 dim stacked flow, dataZoom for zoom.
+
+    Stage 3 修复: 每个 series label.show=False, emphasis 时显示 dim 名称。
+    """
     opt = _get_base_option(
         "TCFD Disclosure Trend (2000-2024)",
         "Drag the slider to zoom into a time range"
@@ -114,13 +132,21 @@ def build_streamgraph(data: dict, theme: dict) -> dict:
             "smooth": True,
             "data": s["data"],
             "areaStyle": {"opacity": 0.7},
-            "emphasis": {"focus": "series"},
+            "label": {"show": False},
+            "emphasis": {
+                "focus": "series",
+                "label": {"show": True, "color": "#fff", "fontSize": 12},
+            },
         })
     return opt
 
 
 def build_network(data: dict, theme: dict) -> dict:
-    """Force-directed network: draggable nodes, force layout."""
+    """Force-directed network: draggable nodes, force layout.
+
+    Stage 3 修复: label.show=False (默认不显示), emphasis.label.show=True
+    (悬停节点时显示关键词名)。
+    """
     opt = _get_base_option(
         "Keyword Co-occurrence Network (Recent 3 Years)",
         "Draggable nodes, hover to see co-occurrence count"
@@ -151,9 +177,13 @@ def build_network(data: dict, theme: dict) -> dict:
         "roam": theme["global_roam"],
         "draggable": True,
         "force": {"repulsion": 80, "edgeLength": 50},
-        "emphasis": {"focus": "adjacency"},
+        "emphasis": {
+            "focus": "adjacency",
+            "label": {"show": True, "position": "right", "fontSize": 11,
+                      "color": "#fff"},
+        },
         "lineStyle": {"curveness": 0.1, "width": 1},
-        "label": {"show": True, "position": "right", "fontSize": 10},
+        "label": {"show": False, "position": "right", "fontSize": 10},
         "animation": theme["animation"],
         "animationDuration": theme["animation_duration"],
     }]
@@ -161,7 +191,11 @@ def build_network(data: dict, theme: dict) -> dict:
 
 
 def build_sankey(data: dict, theme: dict) -> dict:
-    """Sankey: 4-stage pipeline, namespace prefix on nodes."""
+    """Sankey: 4-stage pipeline, namespace prefix on nodes.
+
+    Stage 3 修复: label.show=False (默认不显示), 鼠标悬停时 ECharts
+    自动用 emphasis.label 显示节点名 (formatter 仍生效)。
+    """
     opt = _get_base_option(
         "NLP Pipeline Data Refinement",
         "10,814 reports → chunking → disclosure → by dimension"
@@ -170,9 +204,13 @@ def build_sankey(data: dict, theme: dict) -> dict:
         "type": "sankey",
         "nodes": data["nodes"],
         "links": data["links"],
-        "emphasis": {"focus": "adjacency"},
+        "emphasis": {
+            "focus": "adjacency",
+            "label": {"show": True, "fontSize": 12, "color": "#fff"},
+        },
         "lineStyle": {"color": "gradient", "curveness": 0.5},
         "label": {
+            "show": False,
             "formatter": theme["sankey_label_formatter"],
             "fontSize": 11,
         },

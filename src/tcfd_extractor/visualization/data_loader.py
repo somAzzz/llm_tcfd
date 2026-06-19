@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from .translations import translate
+from .translations import KEYWORD_TRANSLATIONS, translate
 
 logger = logging.getLogger(__name__)
 
@@ -120,11 +120,25 @@ def compute_top_keyword_pairs(
     return pair_counts.most_common(n)
 
 
+def _chart_translate(s: str) -> str:
+    """For chart data (sunburst/streamgraph): translate if known, else return original.
+
+    与 translate_smart() 区别: 不可翻译时直接返回原字符串 (不带 [[ZH: ...]] wrapper),
+    避免 tooltip 里出现 [[ZH: 词1]] 这种带包装的难看字符串。
+    """
+    if not s:
+        return s
+    return KEYWORD_TRANSLATIONS.get(s, s)
+
+
 def load_sunburst_data(clusters_dir: Path) -> list[dict]:
-    """Sunburst 数据: 3 维 → 聚类 → 关键词 三层树。
+    """Sunburst 数据: 3 维 → 聚类 → 关键词 三层树 (全部英文化)。
 
     真实 cluster JSON 格式: 顶层 list, 每项 {cluster_id, keywords, size, math_label}
     文件名: {政策维度,市场维度,技术维度}_clusters.json
+
+    Stage 3 修复: dim/cluster/keyword 名称全部走 translate_smart(), 不可翻译的
+    中文 fallback 到 "Cluster {cluster_id}" (避免 [[ZH: ...]] 出现在 tooltip)。
 
     Args:
         clusters_dir: 含 {政策维度,市场维度,技术维度}_clusters.json 的目录
@@ -133,71 +147,88 @@ def load_sunburst_data(clusters_dir: Path) -> list[dict]:
         list of {name, children: [{name, children: [{name, value}]}]}
     """
     import json as _json
-    # 文件名用 "维度" 后缀, 显示名不带
-    dim_files = [("政策", "政策维度"), ("市场", "市场维度"), ("技术", "技术维度")]
+    # 文件名用 "维度" 后缀, 显示名直接用英文 (translation 走 translate_smart 兜底)
+    dim_files = [("政策维度", "Policy"), ("市场维度", "Market"), ("技术维度", "Technology")]
     result = []
-    for display_name, file_stem in dim_files:
+    for file_stem, display_en in dim_files:
         path = clusters_dir / f"{file_stem}_clusters.json"
         if not path.exists():
             logger.warning("Sunburst: cluster file missing for dim=%s (path=%s), skipping",
-                           display_name, path)
-            result.append({"name": display_name, "children": []})
+                           display_en, path)
+            result.append({"name": display_en, "children": []})
             continue
         with path.open(encoding="utf-8") as f:
             data = _json.load(f)
         # 真实 schema: 顶层 list, 每项 {cluster_id, math_label, keywords, size}
         if not isinstance(data, list):
-            logger.warning("Sunburst: dim=%s file is not a list, skipping", display_name)
-            result.append({"name": display_name, "children": []})
+            logger.warning("Sunburst: dim=%s file is not a list, skipping", display_en)
+            result.append({"name": display_en, "children": []})
             continue
         children = []
         for cluster in data:
-            kw_children = [{"name": kw, "value": 1} for kw in cluster.get("keywords", [])]
+            # cluster 名称: _chart_translate + Cluster {id} fallback
+            raw_label = cluster.get("math_label", "")
+            cluster_id = cluster.get("cluster_id", "?")
+            translated = _chart_translate(raw_label)
+            # _chart_translate 返回原值时还是中文, fallback 到 Cluster {id}
+            if not translated or any('\u4e00' <= c <= '\u9fff' for c in translated):
+                cluster_name = f"Cluster {cluster_id}"
+            else:
+                cluster_name = translated
+            # 关键词也翻译 (保留原文若未收录)
+            kw_children = [{"name": _chart_translate(kw), "value": 1}
+                           for kw in cluster.get("keywords", [])]
             children.append({
-                "name": cluster.get("math_label", f"cluster_{cluster.get('cluster_id', '?')}"),
+                "name": cluster_name,
                 "children": kw_children,
             })
-        result.append({"name": display_name, "children": children})
+        result.append({"name": display_en, "children": children})
     return result
 
 
 def load_streamgraph_data(eval_dir: Path, years: list[int]) -> dict:
-    """Streamgraph: year × 3 维 矩阵。
+    """Streamgraph: year × 3 维 矩阵 (英文化 dim 名)。
+
+    Stage 3 修复: dim 名称用英文 "Policy"/"Market"/"Technology", 数据按
+    原始中文 dimension 字段聚合, 最后映射到英文 series。
 
     Args:
         eval_dir: 含 <year>/results.jsonl 的目录
         years: 年份列表 (e.g., range(2000, 2025))
 
     Returns:
-        {"years": [...], "series": [{"name": "政策", "data": [...]}, ...]}
+        {"years": [...], "series": [{"name": "Policy", "data": [...]}, ...]}
     """
     import json as _json
-    dim_names = ["政策", "市场", "技术"]
-    series_data = {d: [] for d in dim_names}
+    # 中文 dim (数据) → 英文 dim (显示) 映射
+    dim_zh_to_en = {"政策": "Policy", "市场": "Market", "技术": "Technology"}
+    dim_en_order = ["Policy", "Market", "Technology"]
+    series_data = {d: [] for d in dim_en_order}
     actual_years = []
     for year in years:
         path = eval_dir / str(year) / "results.jsonl"
         if not path.exists():
             logger.warning("Streamgraph: missing results.jsonl for year=%d", year)
-            for d in dim_names:
+            for d in dim_en_order:
                 series_data[d].append(0)
             actual_years.append(year)
             continue
-        counts = {d: 0 for d in dim_names}
+        # 用中文 key 计数, 再映射到英文
+        counts_zh = {"政策": 0, "市场": 0, "技术": 0}
         with path.open(encoding="utf-8") as f:
             for line in f:
                 row = _json.loads(line)
                 if not row.get("is_tcfd_related"):
                     continue
-                dim = row.get("dimension", "无")
-                if dim in counts:
-                    counts[dim] += 1
-        for d in dim_names:
-            series_data[d].append(counts[d])
+                dim = row.get("dimension", "")
+                if dim in counts_zh:
+                    counts_zh[dim] += 1
+        for d_zh, d_en in dim_zh_to_en.items():
+            series_data[d_en].append(counts_zh[d_zh])
         actual_years.append(year)
     return {
         "years": actual_years,
-        "series": [{"name": d, "data": series_data[d]} for d in dim_names],
+        "series": [{"name": d, "data": series_data[d]} for d in dim_en_order],
     }
 
 

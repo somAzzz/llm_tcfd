@@ -50,16 +50,16 @@ def test_get_base_option_returns_skeleton():
 def test_build_sunburst_returns_echarts_option_skeleton():
     """Sunburst builder 输出 ECharts sunburst series。"""
     data = [
-        {"name": "政策", "children": [
-            {"name": "聚类A", "children": [{"name": "词1", "value": 1}]}
+        {"name": "Policy", "children": [
+            {"name": "Cluster A", "children": [{"name": "词1", "value": 1}]}
         ]},
-        {"name": "市场", "children": []},
-        {"name": "技术", "children": []},
+        {"name": "Market", "children": []},
+        {"name": "Technology", "children": []},
     ]
     opt = build_sunburst(data, TCFD_THEME_CONFIG)
     assert opt["series"][0]["type"] == "sunburst"
     assert len(opt["series"][0]["data"]) == 3  # 3 个 dim 根
-    assert opt["series"][0]["data"][0]["children"][0]["name"] == "聚类A"
+    assert opt["series"][0]["data"][0]["children"][0]["name"] == "Cluster A"
 
 
 def test_build_streamgraph_returns_stacked_line_series():
@@ -67,9 +67,9 @@ def test_build_streamgraph_returns_stacked_line_series():
     data = {
         "years": [2020, 2021, 2022],
         "series": [
-            {"name": "政策", "data": [5, 7, 9]},
-            {"name": "市场", "data": [2, 1, 3]},
-            {"name": "技术", "data": [3, 4, 6]},
+            {"name": "Policy", "data": [5, 7, 9]},
+            {"name": "Market", "data": [2, 1, 3]},
+            {"name": "Technology", "data": [3, 4, 6]},
         ],
     }
     opt = build_streamgraph(data, TCFD_THEME_CONFIG)
@@ -243,3 +243,71 @@ class TestBuildersEnglishTitles:
         sub = opt["title"].get("subtext", "")
         assert _has_no_cjk(title)
         assert _has_no_cjk(sub)
+
+
+class TestLabelsHiddenByDefault:
+    """Stage 3 修复: 图表默认不显示文字, 只有鼠标悬停才显示英文内容。
+
+    4 个 chart 都必须:
+    - series.label.show == False (默认)
+    - series.emphasis.label.show == True (悬停时显示)
+    """
+
+    def test_sunburst_label_hidden_by_default(self):
+        data = [{"name": "Policy", "children": [{"name": "A", "children": []}]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        series = opt["series"][0]
+        assert series["label"].get("show") is False, "sunburst label.show must be False"
+        # emphasis 时显示
+        assert "emphasis" in series
+        assert series["emphasis"].get("label", {}).get("show") is True
+
+    def test_streamgraph_series_label_hidden_by_default(self):
+        data = {"years": [2020], "series": [{"name": "Policy", "data": [1]}]}
+        opt = build_streamgraph(data, TCFD_THEME_CONFIG)
+        for s in opt["series"]:
+            assert s.get("label", {}).get("show") is False, \
+                f"streamgraph series {s['name']} label.show must be False"
+
+    def test_network_label_hidden_by_default(self):
+        data = {
+            "nodes": [{"id": "a", "name": "a", "symbolSize": 15, "category": "Policy", "value": 1}],
+            "links": [],
+        }
+        opt = build_network(data, TCFD_THEME_CONFIG)
+        series = opt["series"][0]
+        assert series["label"].get("show") is False, "network label.show must be False"
+        # emphasis 时显示
+        assert "emphasis" in series
+        assert series["emphasis"].get("label", {}).get("show") is True
+
+    def test_sankey_label_hidden_by_default(self):
+        data = {"nodes": [{"name": "stage1_x"}], "links": []}
+        opt = build_sankey(data, TCFD_THEME_CONFIG)
+        series = opt["series"][0]
+        assert series["label"].get("show") is False, "sankey label.show must be False"
+
+
+class TestChartBackgroundMatchesDark:
+    """Stage 3 修复: dark 背景下 chart 颜色应与 dark 背景匹配。
+
+    ECharts 公共 base option 必须含 chart background = transparent (与 page bg 融合),
+    不能用默认的 white。
+    """
+
+    def test_base_option_background_is_transparent(self):
+        """_get_base_option 应注入 backgroundColor: 'transparent' 让 chart 透明。"""
+        opt = _get_base_option("T", "S")
+        assert opt.get("backgroundColor") == "transparent", \
+            f"chart background must be transparent for dark mode, got {opt.get('backgroundColor')!r}"
+
+    def test_theme_has_background_config(self):
+        """TCFD_THEME_CONFIG 应含 chart_background 字段供 builder 使用。"""
+        assert "chart_background" in TCFD_THEME_CONFIG
+        assert TCFD_THEME_CONFIG["chart_background"] == "transparent"
+
+    def test_palette_uses_dark_friendly_bright_colors(self):
+        """暗色背景下 3 维颜色用亮色 (policy/market/tech), 保持 Stage 2 调色板。"""
+        assert TCFD_THEME_CONFIG["colors"]["policy"] == "#58a6ff"
+        assert TCFD_THEME_CONFIG["colors"]["market"] == "#f0883e"
+        assert TCFD_THEME_CONFIG["colors"]["tech"] == "#56d364"
