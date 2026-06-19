@@ -99,6 +99,15 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
     Stage 4 修复: 加 levels 配置, 最外圈 (keyword 层级) 用深蓝色 #0a1929,
     替代默认白/浅色 (用户反馈 "把sunburst的最下面那层改成深蓝色")。
     levels 按 depth 索引: levels[1]=dim, levels[2]=cluster, levels[3]=keyword。
+
+    Stage 4 颜色继承增强: levels[2] (cluster) 不再写死灰色, 而是依赖
+    load_sunburst_data 给每个 cluster 节点注入的 itemStyle.color (父辈 dim
+    颜色的 alpha=0.4 rgba)。这样 cluster 层视觉上是 "父辈 dim 色的淡化
+    过渡", 实现 亮色 → 半透明过渡 → 深蓝 的色彩渐进流动。
+
+    Stage 4 emphasis 增强: levels[3] (keyword/最外圈) 加 shadowBlur +
+    shadowColor, 鼠标悬停时发淡白光, 抵抗炭黑背景 (#0f1419) 让深蓝环
+    不至于看不清。
     """
     opt = _get_base_option(
         "TCFD Dimensions & Clusters",
@@ -138,12 +147,19 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
             {  # 1: dim (Policy/Market/Technology) - 亮色
                 "itemStyle": {"color": dim_colors},
             },
-            {  # 2: cluster - 沿用 dim 颜色淡化 (用饱和度低一些的灰色)
-                "itemStyle": {"color": "#3a4554"},
-            },
-            {  # 3: keyword (最外圈) - 深蓝色, 替代默认白/浅色
+            {},  # 2: cluster - 颜色由 load_sunburst_data 注入的 per-node
+                 # itemStyle.color 决定 (父辈 dim 色 alpha=0.4 rgba), ECharts
+                 # 优先 per-node, 这里留空避免覆盖
+            {  # 3: keyword (最外圈) - 深蓝色 + 边框 + 悬停发光
                 "itemStyle": {"color": "#0a1929", "borderColor": "#1f3a5a",
                               "borderWidth": 1},
+                # 悬停时发淡白光抵抗炭黑背景, 同时自动高亮 ancestor 链
+                "emphasis": {
+                    "itemStyle": {
+                        "shadowBlur": 10,
+                        "shadowColor": "rgba(255, 255, 255, 0.1)",
+                    },
+                },
             },
         ],
     }]

@@ -148,9 +148,22 @@ def load_sunburst_data(clusters_dir: Path) -> list[dict]:
     """
     import json as _json
     # 文件名用 "维度" 后缀, 显示名直接用英文 (translation 走 translate_smart 兜底)
-    dim_files = [("政策维度", "Policy"), ("市场维度", "Market"), ("技术维度", "Technology")]
+    # Stage 4 颜色继承: 每个 dim 关联一个 hex 色, cluster 层用 alpha=0.4 的 rgba
+    # 视觉流向: dim 亮色 → cluster 半透明过渡 → keyword 深蓝收尾
+    dim_files = [
+        ("政策维度", "Policy", "#58a6ff"),
+        ("市场维度", "Market", "#f0883e"),
+        ("技术维度", "Technology", "#56d364"),
+    ]
+    # 把 hex 转成 rgba(alpha=0.4) — 与炭黑背景叠加形成"沉淀感"过渡色
+    # 例: #58a6ff → rgba(88, 166, 255, 0.4)
+    def _hex_to_rgba(hex_color: str, alpha: float = 0.4) -> str:
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r}, {g}, {b}, {alpha})"
+
     result = []
-    for file_stem, display_en in dim_files:
+    for file_stem, display_en, dim_hex in dim_files:
         path = clusters_dir / f"{file_stem}_clusters.json"
         if not path.exists():
             logger.warning("Sunburst: cluster file missing for dim=%s (path=%s), skipping",
@@ -164,6 +177,8 @@ def load_sunburst_data(clusters_dir: Path) -> list[dict]:
             logger.warning("Sunburst: dim=%s file is not a list, skipping", display_en)
             result.append({"name": display_en, "children": []})
             continue
+        # 该 dim 所有 cluster 节点共用一个淡化色 (继承父辈 dim 颜色)
+        cluster_color = _hex_to_rgba(dim_hex, alpha=0.4)
         children = []
         for cluster in data:
             # cluster 名称: _chart_translate + Cluster {id} fallback
@@ -178,8 +193,11 @@ def load_sunburst_data(clusters_dir: Path) -> list[dict]:
             # 关键词也翻译 (保留原文若未收录)
             kw_children = [{"name": _chart_translate(kw), "value": 1}
                            for kw in cluster.get("keywords", [])]
+            # Stage 4: 注入 dim 继承色到 cluster 节点, ECharts 优先 per-node color
+            # 而非 levels[2] 的统一色, 实现 "父辈 dim 色 → 淡化过渡" 视觉流
             children.append({
                 "name": cluster_name,
+                "itemStyle": {"color": cluster_color},
                 "children": kw_children,
             })
         result.append({"name": display_en, "children": children})

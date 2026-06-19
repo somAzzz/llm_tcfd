@@ -540,3 +540,57 @@ class TestSunburstOutermostRingDarkBlue:
         assert len(levels) >= 4, (
             f"sunburst must have ≥4 levels (dim/cluster/keyword + fallback), got {len(levels)}"
         )
+
+    def test_sunburst_outermost_has_emphasis_glow(self):
+        """Stage 4 emphasis 增强: 最外圈 (keyword) 悬停时发淡白光抵抗炭黑背景。
+
+        实现: levels[-1].emphasis.itemStyle.shadowBlur + shadowColor。
+        shadowColor 必须是 rgba 白光 (alpha < 0.5, 不能太刺眼)。
+        """
+        data = [{"name": "Policy", "children": [
+            {"name": "Cluster A", "children": [{"name": "kw1", "value": 1}]}
+        ]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        outermost = opt["series"][0]["levels"][-1]
+        assert "emphasis" in outermost, (
+            f"outermost level must have emphasis config (glow on hover), got: {outermost}"
+        )
+        emph_style = outermost["emphasis"].get("itemStyle", {})
+        assert "shadowBlur" in emph_style, (
+            f"outermost emphasis.itemStyle must have shadowBlur, got: {emph_style}"
+        )
+        assert emph_style["shadowBlur"] > 0, (
+            f"shadowBlur={emph_style['shadowBlur']} must be > 0 to create glow"
+        )
+        shadow_color = emph_style.get("shadowColor", "")
+        # 淡白光格式: rgba(r, g, b, alpha), r=g=b=255
+        assert shadow_color.startswith("rgba"), (
+            f"shadowColor must be rgba format, got: {shadow_color}"
+        )
+        # alpha 必须 < 0.5 (不能太刺眼, 否则深蓝环变成纯白圈)
+        alpha_str = shadow_color.split(",")[-1].rstrip(")").strip()
+        alpha = float(alpha_str)
+        assert 0 < alpha < 0.5, (
+            f"shadowColor alpha={alpha} must be in (0, 0.5) for subtle glow"
+        )
+
+    def test_sunburst_cluster_level_no_fixed_color(self):
+        """Stage 4 颜色继承: levels[2] (cluster) 不应写死颜色, 应依赖 per-node。
+
+        旧实现用 #3a4554 死灰, 切断了 dim → cluster → keyword 的色彩流。
+        新实现: levels[2] 留空, 由 load_sunburst_data 注入的 per-node
+        itemStyle.color (父辈 dim 色 alpha=0.4) 决定。
+        """
+        data = [{"name": "Policy", "children": [
+            {"name": "Cluster A", "children": [{"name": "kw1", "value": 1}]}
+        ]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        cluster_level = opt["series"][0]["levels"][2]
+        # 不应该有 itemStyle.color (如果设置, 会被 ECharts 当作 fallback)
+        # 但允许 itemStyle 存在 (只要不带 color 字段)
+        if "itemStyle" in cluster_level:
+            assert "color" not in cluster_level["itemStyle"], (
+                f"cluster level (levels[2]) must NOT set itemStyle.color; "
+                "color should come from per-node itemStyle injected by load_sunburst_data. "
+                f"Got: {cluster_level}"
+            )

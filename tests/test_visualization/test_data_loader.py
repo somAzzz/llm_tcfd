@@ -199,6 +199,56 @@ def test_load_sunburst_translates_realistic_chinese_math_labels(tmp_path):
         assert not c.startswith("[[ZH:"), f"untranslated Chinese: {c!r}"
 
 
+def test_load_sunburst_data_injects_dim_color_inheritance_per_cluster(tmp_path):
+    """Stage 4 颜色继承: 每个 cluster 节点必须有 itemStyle.color,
+    继承父辈 dim 的颜色 (Policy=#58a6ff → rgba 半透明, Market=#f0883e → ...,
+    Technology=#56d364 → ...) 让 cluster 层视觉上是父辈色的淡化过渡,
+    而非通铺死灰。
+
+    实现: load_sunburst_data 给每个 cluster 节点注入
+    itemStyle.color = rgba(R, G, B, 0.4), alpha=0.4 让它与炭黑背景叠加。
+    """
+    from tcfd_extractor.visualization.data_loader import load_sunburst_data
+    clusters_dir = tmp_path / "phase5_category_mapping"
+    clusters_dir.mkdir()
+    # 每个 dim 各一个 cluster
+    (clusters_dir / "政策维度_clusters.json").write_text(json.dumps([
+        {"cluster_id": 0, "math_label": "测试1", "keywords": ["x"], "size": 1},
+    ], ensure_ascii=False))
+    (clusters_dir / "市场维度_clusters.json").write_text(json.dumps([
+        {"cluster_id": 0, "math_label": "测试2", "keywords": ["y"], "size": 1},
+    ], ensure_ascii=False))
+    (clusters_dir / "技术维度_clusters.json").write_text(json.dumps([
+        {"cluster_id": 0, "math_label": "测试3", "keywords": ["z"], "size": 1},
+    ], ensure_ascii=False))
+
+    result = load_sunburst_data(clusters_dir)
+
+    # 3 个 dim 各对应一个 cluster, 都必须有 itemStyle.color
+    import re as _re
+    rgba_re = _re.compile(r"^rgba\(\d+,\s*\d+,\s*\d+,\s*[\d.]+\)$")
+    expected_colors = {
+        "Policy": "rgba(88, 166, 255, 0.4)",   # #58a6ff
+        "Market": "rgba(240, 136, 62, 0.4)",   # #f0883e
+        "Technology": "rgba(86, 211, 100, 0.4)",  # #56d364
+    }
+    for dim_name, expected_color in expected_colors.items():
+        dim = next(d for d in result if d["name"] == dim_name)
+        assert dim["children"], f"{dim_name} has no clusters"
+        cluster = dim["children"][0]
+        assert "itemStyle" in cluster, (
+            f"{dim_name} cluster missing itemStyle (color inheritance broken): {cluster}"
+        )
+        color = cluster["itemStyle"].get("color", "")
+        assert rgba_re.match(color), (
+            f"{dim_name} cluster color must be rgba(r, g, b, alpha), got: {color!r}"
+        )
+        assert color == expected_color, (
+            f"{dim_name} cluster color should be {expected_color} (parent dim with alpha=0.4), "
+            f"got: {color}"
+        )
+
+
 def test_load_streamgraph_data_aggregates_dimension_per_year(tmp_path):
     """Streamgraph: 聚合每年 results.jsonl 的 dimension 字段 (is_tcfd_related=true)。"""
     eval_dir = tmp_path / "evaluate_cooccurrence"
