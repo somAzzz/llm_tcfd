@@ -7,21 +7,6 @@ import logging
 from datetime import date
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
-
-def _dataclass_default(obj):
-    """JSON encoder fallback: convert dataclass instances to dicts.
-
-    `build_pipeline_health_dashboard` embeds `PipelineMetric` instances in
-    each bar's data payload (used by the tooltip formatter).  Standard
-    `json.dumps` cannot serialize them, so we register this `default` to
-    turn any dataclass into `dataclasses.asdict(...)`.
-    """
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return dataclasses.asdict(obj)
-    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
-
 from .data_loader import (
     load_network_data,
     load_sankey_data,
@@ -38,6 +23,21 @@ from .echarts import (
 )
 from .template import HTML_TEMPLATE
 from .translations import KEYWORD_TRANSLATIONS, translate_smart
+
+logger = logging.getLogger(__name__)
+
+
+def _dataclass_default(obj):
+    """JSON encoder fallback: convert dataclass instances to dicts.
+
+    `build_pipeline_health_dashboard` embeds `PipelineMetric` instances in
+    each bar's data payload (used by the tooltip formatter).  Standard
+    `json.dumps` cannot serialize them, so we register this `default` to
+    turn any dataclass into `dataclasses.asdict(...)`.
+    """
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return dataclasses.asdict(obj)
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 
 def build_context_index(eval_dir: Path, years: list[int]) -> dict:
@@ -98,8 +98,7 @@ def build_context_index(eval_dir: Path, years: list[int]) -> dict:
 def assemble_html(
     results_root: Path,
     *,
-    refactor_bar_b64: str = "",
-    module_graph_svg: str,
+    module_graph_svg: str = "",
     pipeline_metrics: list | None = None,
     refactor_stats: dict | None = None,
     build_date: str | None = None,
@@ -152,7 +151,7 @@ def assemble_html(
             name=TEST_COVERAGE_TEMPLATE.name,
             unit=TEST_COVERAGE_TEMPLATE.unit,
             before=refactor_stats.get("test_before", 16),
-            after=refactor_stats.get("test_after", 0) or 0,
+            after=refactor_stats.get("test_after", 0),
             note=TEST_COVERAGE_TEMPLATE.note,
         )
         pipeline_metrics = [*ALL_STATIC_METRICS, test_coverage]
@@ -182,9 +181,6 @@ def assemble_html(
         sankey_json=sankey_json,
         pipeline_health_dashboard_json=pipeline_health_dashboard_json,
         module_graph_json=module_graph_json,
-        # Kept for backward compat (template no longer uses these)
-        refactor_b64=refactor_bar_b64,
-        module_graph_svg=module_graph_svg,
         refactor_stats=refactor_stats or {},
         build_date=build_date or date.today().isoformat(),
         # Stage 2 注入

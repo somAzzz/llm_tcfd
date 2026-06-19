@@ -531,6 +531,7 @@ flowchart LR
       const el = document.getElementById('echarts-pipeline-health-dashboard');
       if (!el || !window.__hrCharts['echarts-pipeline-health-dashboard']) return;
       const chart = window.__hrCharts['echarts-pipeline-health-dashboard'];
+      chart.off('click');   // prevent duplicate handlers on rebuildAllCharts()
       chart.on('click', function () { window.__hrToggleDeepDive(); });
     }
 
