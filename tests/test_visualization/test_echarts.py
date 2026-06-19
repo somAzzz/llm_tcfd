@@ -750,3 +750,127 @@ class TestBuildModuleGraph:
         assert "repulsion" in force
         assert "edgeLength" in force
 
+    def test_node_label_is_white_without_border(self):
+        """Node text must be white on the dark canvas with no white frame."""
+        from tcfd_extractor.visualization.echarts import build_module_graph
+        opt = build_module_graph(
+            {"a": ["b"], "b": []}, TCFD_THEME_CONFIG,
+        )
+        label = opt["series"][0]["label"]
+        assert label["color"] == "#ffffff", "label color must be white"
+        assert label.get("backgroundColor") == "transparent"
+        assert label.get("borderColor") == "transparent"
+        assert label.get("borderWidth", 0) == 0
+
+
+class TestJsFunctionAndEncode:
+    """Regression tests for JsFunction marker + encode_echarts_option encoder.
+
+    Background: ECharts formatter callbacks (tooltip.formatter, axisLabel.
+    formatter, etc.) must be JS function literals, NOT JSON strings. Earlier
+    versions used raw json.dumps which wrapped the JS source in quotes — the
+    chart then displayed the source text verbatim instead of evaluating the
+    formatter.
+    """
+
+    def test_jsfunction_is_a_str_subclass(self):
+        from tcfd_extractor.visualization.echarts import JsFunction
+        fn = JsFunction("function () { return 1; }")
+        # Still behaves like a string everywhere (transparent marker).
+        assert isinstance(fn, str)
+        assert "function" in fn
+        assert fn.startswith("function")
+
+    def test_encode_plain_dict_is_standard_json(self):
+        """Without JsFunction, output is just JSON (no sentinels)."""
+        from tcfd_extractor.visualization.echarts import encode_echarts_option
+        out = encode_echarts_option({"a": 1, "b": [2, 3]})
+        # json.dumps always inserts a space after `:`.
+        assert out == '{"a": 1, "b": [2, 3]}' or out == '{"a":1, "b":[2,3]}'
+
+    def test_encode_jsfunction_emits_bare_literal(self):
+        """JsFunction values must serialize WITHOUT surrounding JSON quotes."""
+        from tcfd_extractor.visualization.echarts import (
+            JsFunction, encode_echarts_option,
+        )
+        fn = JsFunction("function (x) { return x * 2; }")
+        out = encode_echarts_option({"formatter": fn})
+        # json.dumps always inserts a space after `:`, so accept either form.
+        assert '"formatter": function (x) { return x * 2; }' in out
+        # And there must be no JSON-quote wrapping the function source.
+        assert '"function' not in out
+        # No sentinel leakage into the output.
+        assert "<<<JSFN" not in out
+
+    def test_encode_jsfunction_nested_in_list_and_dict(self):
+        """Sentinels must work at any nesting depth."""
+        from tcfd_extractor.visualization.echarts import (
+            JsFunction, encode_echarts_option,
+        )
+        opt = {
+            "tooltip": {
+                "formatter": JsFunction("function (p) { return p.name; }"),
+            },
+            "series": [
+                {
+                    "type": "bar",
+                    "label": {
+                        "formatter": JsFunction("function (p) { return p.value; }"),
+                    },
+                },
+            ],
+        }
+        out = encode_echarts_option(opt)
+        assert "function (p) { return p.name; }" in out
+        assert "function (p) { return p.value; }" in out
+        # No JSON-quote wrapping the function source.
+        assert '"function' not in out
+        assert 'function"' not in out
+        # No sentinel leakage.
+        assert "<<<JSFN" not in out
+
+    def test_encode_preserves_non_ascii_strings(self):
+        """ensure_ascii=False behaviour must be preserved for non-JsFunction strings."""
+        from tcfd_extractor.visualization.echarts import encode_echarts_option
+        out = encode_echarts_option({"title": "气候相关风险"})
+        # Must NOT escape the CJK chars to \uXXXX.
+        assert "气候相关风险" in out
+
+    def test_encode_pipeline_health_dashboard_formatters(self):
+        """The build_pipeline_health_dashboard output must contain BARE JS
+        formatters (not JSON-quoted strings) when serialized.
+        """
+        import dataclasses
+        from tcfd_extractor.visualization.echarts import (
+            build_pipeline_health_dashboard, encode_echarts_option,
+        )
+        from tcfd_extractor.visualization.pipeline_metrics import (
+            ALL_STATIC_METRICS, TEST_COVERAGE_TEMPLATE, PipelineMetric,
+        )
+
+        def _default(obj):
+            if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+                return dataclasses.asdict(obj)
+            raise TypeError(obj)
+
+        metrics = [*ALL_STATIC_METRICS, PipelineMetric(
+            name=TEST_COVERAGE_TEMPLATE.name,
+            unit=TEST_COVERAGE_TEMPLATE.unit,
+            before=10, after=20,
+            note=TEST_COVERAGE_TEMPLATE.note,
+        )]
+        opt = build_pipeline_health_dashboard(metrics, TCFD_THEME_CONFIG)
+        out = encode_echarts_option(opt, default=_default)
+        # The 3 formatters must be present as bare function literals.
+        # _LABEL_FN and _PIPELINE_HEALTH_TOOLTIP_FN both start with
+        # "function (params)"; _WRAP_XAXIS_FN starts with "function (value)".
+        assert out.count("function (params) {") >= 2
+        assert "function (value) {" in out
+        # And there must be NO JSON-quoted function strings.
+        assert '"function' not in out, (
+            "Found JSON-quoted function string — formatter would render as "
+            "raw text instead of being eval'd by ECharts"
+        )
+        # No sentinel leakage into the output.
+        assert "<<<JSFN" not in out
+

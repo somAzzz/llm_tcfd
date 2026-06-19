@@ -5,8 +5,65 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
+
+
+class JsFunction(str):
+    """Marker subclass for JS function source strings.
+
+    When serialized via `encode_echarts_option()`, the source is emitted as a
+    bare JS function literal (no surrounding JSON quotes), so ECharts can
+    `eval` it as a formatter callback (e.g. `tooltip.formatter`).
+
+    Subclassing `str` keeps it transparent everywhere else (string concat,
+    comparisons, etc.).
+    """
+
+    __slots__ = ()
+
+
+# ASCII-only sentinels that survive `json.dumps` unchanged. Must not contain
+# `"` or `\` (which JSON would escape) and must be improbable in real content.
+_JSFN_OPEN = "<<<JSFN_OPEN>>>"
+_JSFN_CLOSE = "<<<JSFN_CLOSE>>>"
+
+
+def encode_echarts_option(opt: Any, default: Any = None) -> str:
+    """Serialize an ECharts option dict to JSON, keeping `JsFunction` raw.
+
+    ECharts expects formatters like `tooltip.formatter` to be a JS function
+    literal, NOT a JSON string. `json.dumps` would wrap them in quotes, which
+    ECharts would then display as literal source text instead of evaluating.
+
+    Solution: walk the opt tree, wrap each `JsFunction` value in sentinel
+    markers, run `json.dumps`, then post-process to:
+      1. Strip the JSON quotes that wrap the sentinel-string
+      2. Strip the sentinel markers themselves
+    Result: a bare JS function literal in place of the original string.
+
+    `default` is forwarded to `json.dumps` for non-JsFunction non-standard
+    types (e.g. dataclasses — used for `PipelineMetric` embedded in bar data).
+    """
+    def _sub(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {k: _sub(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_sub(v) for v in obj]
+        if isinstance(obj, JsFunction):
+            return _JSFN_OPEN + str(obj) + _JSFN_CLOSE
+        return obj
+
+    raw = json.dumps(_sub(opt), ensure_ascii=False, default=default)
+    # Step 1: remove the JSON quotes added around our sentinel string.
+    #   "...\"<<<JSFN_OPEN>>>...<<<JSFN_CLOSE>>>\"..."
+    # → "...<<<JSFN_OPEN>>>...<<<JSFN_CLOSE>>>..."
+    raw = raw.replace(f'"{_JSFN_OPEN}', _JSFN_OPEN)
+    raw = raw.replace(f'{_JSFN_CLOSE}"', _JSFN_CLOSE)
+    # Step 2: remove the sentinel markers, leaving the bare JS source.
+    raw = raw.replace(_JSFN_OPEN, "").replace(_JSFN_CLOSE, "")
+    return raw
 
 from .translations import translate_smart
 
@@ -88,8 +145,10 @@ CHART_CONTENT_BOTTOM = 40
 
 
 # JS formatter source strings for build_pipeline_health_dashboard.
-# Receives `params.data.metric` and returns a formatted string.
-_LABEL_FN = (
+# Wrapped in JsFunction so encode_echarts_option() emits them as bare JS
+# function literals (no surrounding JSON quotes), which ECharts eval()s
+# internally as formatter callbacks.
+_LABEL_FN = JsFunction(
     "function (params) {"
     "  var m = params.data && params.data.metric;"
     "  if (!m) return String(params.value);"
@@ -98,7 +157,7 @@ _LABEL_FN = (
     "}"
 )
 
-_PIPELINE_HEALTH_TOOLTIP_FN = (
+_PIPELINE_HEALTH_TOOLTIP_FN = JsFunction(
     "function (params) {"
     "  return params.map(function (p) {"
     "    var m = p.data && p.data.metric;"
@@ -110,7 +169,7 @@ _PIPELINE_HEALTH_TOOLTIP_FN = (
     "}"
 )
 
-_WRAP_XAXIS_FN = (
+_WRAP_XAXIS_FN = JsFunction(
     "function (value) {"
     "  if (value.length <= 14) return value;"
     "  var words = value.split(' ');"
@@ -477,7 +536,15 @@ def build_module_graph(
             "links": links,
             "force": {"repulsion": 200, "edgeLength": 80},
             "emphasis": {"focus": "adjacency", "lineStyle": {"width": 3}},
-            "label": {"show": True, "position": "right", "fontSize": 12},
+            "label": {
+                "show": True,
+                "position": "right",
+                "fontSize": 12,
+                "color": "#ffffff",
+                "backgroundColor": "transparent",
+                "borderColor": "transparent",
+                "borderWidth": 0,
+            },
             "lineStyle": {"color": "source", "curveness": 0.1, "opacity": 0.6},
         }
     ]

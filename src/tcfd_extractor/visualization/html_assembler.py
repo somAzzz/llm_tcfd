@@ -20,6 +20,7 @@ from .echarts import (
     build_sankey,
     build_streamgraph,
     build_sunburst,
+    encode_echarts_option,
 )
 from .template import HTML_TEMPLATE
 from .translations import KEYWORD_TRANSLATIONS, translate_smart
@@ -166,8 +167,16 @@ def assemble_html(
     else:
         module_graph_opt = {"series": [{"type": "graph", "data": [], "links": []}]}
 
-    pipeline_health_dashboard_json = _json.dumps(dashboard_opt, ensure_ascii=False, default=_dataclass_default)
-    module_graph_json = _json.dumps(module_graph_opt, ensure_ascii=False, default=_dataclass_default)
+    # encode_echarts_option keeps JsFunction formatters as bare JS literals
+    # (ECharts evals them as callbacks; json.dumps would quote them and they'd
+    # render as raw source text). Pass `_dataclass_default` so PipelineMetric
+    # instances embedded in bar data still serialize.
+    pipeline_health_dashboard_json = encode_echarts_option(
+        dashboard_opt, default=_dataclass_default,
+    )
+    module_graph_json = encode_echarts_option(
+        module_graph_opt, default=_dataclass_default,
+    )
 
     # Stage 2: 注入 context 索引 (与 load_network_data 的 years 参数一致)
     context_index = build_context_index(eval_dir=eval_dir, years=[2022, 2023, 2024])
