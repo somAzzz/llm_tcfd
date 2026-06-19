@@ -83,7 +83,7 @@ class TestAssembleHtml:
         assert 'id="echarts-sankey"' in html
 
     def test_assembled_html_has_4_echarts_charts(self, tmp_path):
-        """集成测试: 生成的 HTML 含 4 个 ECharts 初始化块。"""
+        """集成测试: 生成的 HTML 含 4 个 ECharts 初始化块 (Stage 2: 通过 buildChart 统一管理, rebuildAllCharts 触发 4 次)。"""
         from tcfd_extractor.visualization.html_assembler import assemble_html
         results = _make_min_results(tmp_path)
         html = assemble_html(
@@ -94,8 +94,11 @@ class TestAssembleHtml:
                             "total_lines": 0, "test_before": 0, "test_after": 0},
         )
         assert "echarts.init" in html
-        # 至少 4 处 echarts.init (sunburst + streamgraph + network + sankey)
-        assert html.count("echarts.init") >= 4
+        # Stage 2: 1 个 buildChart() 函数 + 4 次 buildChart 调用 (sunburst + streamgraph + network + sankey)
+        assert html.count("buildChart(") >= 4
+        # 4 个 chart container div id
+        for cid in ("echarts-sunburst", "echarts-streamgraph", "echarts-network", "echarts-sankey"):
+            assert f"'{cid}'" in html or f'"{cid}"' in html
         # ECharts CDN 引用
         assert "echarts@5" in html
 
@@ -127,3 +130,51 @@ class TestAssembleHtml:
             module_graph_svg="<svg></svg>",
         )
         assert "data:image/png;base64,iVBORw" in html
+
+
+class TestStage2TemplateContent:
+    """Spec §11 集成测试: Inter 字体 + Alpine + 暗色默认 + 侧栏。"""
+
+    def test_html_has_dark_theme_default(self, tmp_path):
+        """<html data-theme='dark'> 暗色默认。"""
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            refactor_bar_b64="x",
+            module_graph_svg="<svg></svg>",
+        )
+        assert 'data-theme="dark"' in html
+
+    def test_html_has_inter_font_link(self, tmp_path):
+        """Inter Google Fonts <link> 出现, 含 display=swap。"""
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            refactor_bar_b64="x",
+            module_graph_svg="<svg></svg>",
+        )
+        assert "Inter:wght" in html
+        assert "display=swap" in html
+
+    def test_html_has_alpine_defer_script(self, tmp_path):
+        """Alpine.js <script defer> 出现, URL 锁版本 3.13.x。"""
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            refactor_bar_b64="x",
+            module_graph_svg="<svg></svg>",
+        )
+        assert "alpinejs@3.13" in html
+        assert "defer" in html
+
+    def test_html_has_side_panel_with_zindex(self, tmp_path):
+        """<aside> 侧栏 + z-index 1000 + backdrop 出现。"""
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            refactor_bar_b64="x",
+            module_graph_svg="<svg></svg>",
+        )
+        assert "hr-side-panel" in html
+        assert "z-index: 1000" in html
+        assert "hr-side-panel-backdrop" in html

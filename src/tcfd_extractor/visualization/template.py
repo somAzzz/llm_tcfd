@@ -1,43 +1,95 @@
-"""Jinja2 HTML template for the HR report."""
+"""Jinja2 HTML template for the HR report (Stage 2: dark + Inter + Alpine)."""
 from __future__ import annotations
 
 from jinja2 import Template
 
-HTML_TEMPLATE = Template("""<!DOCTYPE html>
-<html lang="en">
+HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TCFD Project Demo — Climate Disclosure Analysis</title>
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%231f77b4'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>T</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <script>
+    // Stage 2: 翻译 map + context 索引 (由 html_assembler.py 渲染)
+    window.__hrTranslateMap = {{ translate_map_json|safe }};
+    window.__hrContextIndex = {{ context_index_json|safe }};
+    window.__hrTranslate = function(kw) {
+      if (!kw) return '';
+      const map = window.__hrTranslateMap || {};
+      if (map[kw]) return map[kw];
+      if (/^[\x00-\x7F]+$/.test(kw)) return kw;
+      return '[[ZH: ' + kw.replace(/[^\w\s]+/g, '').trim() + ']]';
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
   <style>
-    :root {
+    :root[data-theme="dark"] {
+      --bg: #0f1419;
+      --fg: #e6e6e6;
+      --card-bg: #1a1f24;
+      --card-border: #2a2f34;
+      --muted: #8b95a1;
+      --accent: #58a6ff;
+      --accent-fg: #ffffff;
+      --header-bg: linear-gradient(135deg, #1f3a5f 0%, #1a4d2e 100%);
+      --kpi-number-color: #58a6ff;
+      --aside-bg: #1a1f24;
+      --aside-border: #2a2f34;
+      --code-bg: #0d1117;
+    }
+    :root[data-theme="light"] {
       --bg: #fafafa;
       --fg: #222;
-      --accent: #1f77b4;
-      --card-bg: #fff;
+      --card-bg: #ffffff;
       --card-border: #e0e0e0;
       --muted: #666;
+      --accent: #1f77b4;
+      --accent-fg: #ffffff;
+      --header-bg: linear-gradient(135deg, #1f77b4 0%, #2ca02c 100%);
+      --kpi-number-color: #1f77b4;
+      --aside-bg: #ffffff;
+      --aside-border: #e0e0e0;
+      --code-bg: #f5f5f5;
     }
     * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--fg);
       margin: 0;
       padding: 0;
       line-height: 1.5;
     }
+    body, section, .kpi-card, header, .hr-side-panel, .callout {
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+    }
     .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
     header {
-      background: linear-gradient(135deg, #1f77b4 0%, #2ca02c 100%);
+      background: var(--header-bg);
       color: white;
       padding: 2rem 1.5rem;
       text-align: center;
+      position: relative;
     }
-    header h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; }
+    header h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; font-weight: 700; }
     header .subtitle { opacity: 0.9; font-size: 1.05rem; }
+    .hr-theme-toggle {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 0.4rem 0.7rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
     .kpi-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -52,10 +104,11 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
       text-align: center;
     }
     .kpi-card .number {
-      font-size: 2rem;
+      font-size: 2.25rem;
       font-weight: 700;
-      color: var(--accent);
+      color: var(--kpi-number-color);
       margin: 0;
+      font-family: 'Inter', sans-serif;
     }
     .kpi-card .label {
       font-size: 0.85rem;
@@ -73,9 +126,10 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
       margin: 0 0 1rem 0;
       font-size: 1.4rem;
       color: var(--accent);
+      font-weight: 600;
     }
     .callout {
-      background: #f0f7ff;
+      background: var(--code-bg);
       border-left: 4px solid var(--accent);
       padding: 1rem 1.25rem;
       margin: 1.5rem 0;
@@ -86,28 +140,13 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
       color: var(--accent);
       font-size: 1.1rem;
     }
-    .filter-row {
-      margin: 1rem 0;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    .filter-row label { font-size: 0.9rem; color: var(--muted); }
-    .filter-row select {
-      padding: 0.4rem 0.6rem;
-      font-size: 0.95rem;
-      border: 1px solid var(--card-border);
-      border-radius: 4px;
-      background: white;
-    }
-    .mermaid { text-align: center; margin: 1rem 0; }
     details.tech-deep-dive {
       margin: 1.5rem 0;
     }
     details.tech-deep-dive summary {
       cursor: pointer;
       padding: 0.75rem 1rem;
-      background: #f5f5f5;
+      background: var(--code-bg);
       border: 1px solid var(--card-border);
       border-radius: 4px;
       font-weight: 500;
@@ -130,7 +169,28 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
     }
   </style>
 </head>
-<body>
+<body x-data x-init="
+  document.documentElement.dataset.theme = localStorage.getItem('hr-theme') || 'dark';
+  Alpine.store('hrApp', {
+    theme: localStorage.getItem('hr-theme') || 'dark',
+    panel: null,
+    toggleTheme() {
+      this.theme = this.theme === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('hr-theme', this.theme);
+      document.documentElement.dataset.theme = this.theme;
+      if (typeof rebuildAllCharts === 'function') rebuildAllCharts();
+    },
+    openPanel(data) { this.panel = data; },
+    closePanel() { this.panel = null; },
+  });
+">
+  <button @click="$store.hrApp.toggleTheme()"
+          class="hr-theme-toggle"
+          :aria-label="`Switch to ${$store.hrApp.theme === 'dark' ? 'light' : 'dark'} mode`">
+    <span x-show="$store.hrApp.theme === 'dark'">☀️</span>
+    <span x-show="$store.hrApp.theme === 'light'">🌙</span>
+  </button>
+
   <header>
     <h1>TCFD Project Demo</h1>
     <p class="subtitle">A production NLP system for climate-related financial disclosure analysis</p>
@@ -163,24 +223,8 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
         identifies <strong>TCFD (climate-related financial disclosure)</strong> content
         across three dimensions: <em>Policy</em>, <em>Market</em>, <em>Technology</em>.
       </p>
-      <p>Below: 3 维聚类层级下钻 (Sunburst) — 点击节点下钻到关键词。</p>
+      <p>Three-dimensional clustering hierarchy (Sunburst) — click a node to drill down to keywords.</p>
       <div id="echarts-sunburst" class="echarts-chart" style="width:100%; height:400px;"></div>
-      <script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof echarts === 'undefined') {
-        document.getElementById('echarts-sunburst').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">ECharts CDN 加载失败</div>';
-        console.error('ECharts not loaded');
-        return;
-    }
-    try {
-        echarts.init(document.getElementById('echarts-sunburst'))
-            .setOption({{ sunburst_json|safe }});
-    } catch (e) {
-        document.getElementById('echarts-sunburst').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败, 请检查数据格式</div>';
-        console.error('Sunburst render failed:', e);
-    }
-});
-</script>
     </section>
 
     <section>
@@ -198,7 +242,6 @@ flowchart LR
     D --> E[5. Score on Policy/Market/Technology]
     E --> F[6. Cluster Similar Topics]
       </div>
-
       <div class="callout">
         <h3>Beyond TCFD: Reusable Architecture</h3>
         <p>
@@ -218,35 +261,18 @@ flowchart LR
     <section>
       <h2>3. What we discovered</h2>
       <p>
-        Below: 2000-2024 年 3 维披露演变流图 (Streamgraph) — 拖动底部滑块缩放时间区间。
+        Below: 25 years (2000-2024) of three-dimensional disclosure evolution (Streamgraph) —
+        drag the bottom slider to zoom into a time range.
       </p>
       <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:400px;"></div>
-      <script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof echarts === 'undefined') { console.error('ECharts not loaded'); return; }
-    try { echarts.init(document.getElementById('echarts-streamgraph')).setOption({{ streamgraph_json|safe }}); } catch (e) { document.getElementById('echarts-streamgraph').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Streamgraph:', e); }
-});
-</script>
 
-      <h3 style="margin-top: 2rem;">关键词共现网络 (近 3 年)</h3>
-      <p>可拖拽节点, hover 显示共现次数。</p>
+      <h3 style="margin-top: 2rem;">Keyword Co-occurrence Network (Recent 3 Years)</h3>
+      <p>Draggable nodes, hover to see co-occurrence count, click a node to view original context.</p>
       <div id="echarts-network" class="echarts-chart" style="width:100%; height:500px;"></div>
-      <script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof echarts === 'undefined') { console.error('ECharts not loaded'); return; }
-    try { echarts.init(document.getElementById('echarts-network')).setOption({{ network_json|safe }}); } catch (e) { document.getElementById('echarts-network').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:500px;">图表渲染失败</div>'; console.error('Network:', e); }
-});
-</script>
 
-      <h3 style="margin-top: 2rem;">NLP 流水线数据提纯 (Sankey)</h3>
-      <p>10,814 份报告 → 分块 → 披露 → 维度归类。</p>
+      <h3 style="margin-top: 2rem;">NLP Pipeline Data Refinement (Sankey)</h3>
+      <p>10,814 reports → chunking → disclosure → by dimension. Click a link to view context.</p>
       <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:400px;"></div>
-      <script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof echarts === 'undefined') { console.error('ECharts not loaded'); return; }
-    try { echarts.init(document.getElementById('echarts-sankey')).setOption({{ sankey_json|safe }}); } catch (e) { document.getElementById('echarts-sankey').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Sankey:', e); }
-});
-</script>
     </section>
 
     <section>
@@ -275,9 +301,150 @@ document.addEventListener('DOMContentLoaded', function() {
     </footer>
   </div>
 
+  <!-- Side panel: backdrop + aside (Alpine 侧栏) -->
+  <div x-show="$store.hrApp.panel"
+       x-transition.opacity.duration.200ms
+       @click="$store.hrApp.closePanel()"
+       class="hr-side-panel-backdrop"
+       style="position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 999;"></div>
+
+  <aside x-show="$store.hrApp.panel"
+         x-transition:enter="hr-slide-in"
+         x-transition:leave="hr-slide-out"
+         @keydown.escape.window="$store.hrApp.closePanel()"
+         class="hr-side-panel"
+         style="position: fixed; right: 0; top: 0; width: 420px; height: 100vh;
+                background: var(--aside-bg); border-left: 1px solid var(--aside-border);
+                box-shadow: -4px 0 12px rgba(0,0,0,0.3); z-index: 1000;
+                transform: translateX(100%); transition: transform 0.25s ease;
+                overflow-y: auto; padding: 1.5rem;">
+    <header style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;
+                   padding-bottom: 0.75rem; border-bottom: 1px solid var(--card-border);">
+      <h3 x-text="$store.hrApp.panel ? $store.hrApp.panel.title : ''"
+          style="margin: 0; flex: 1; font-size: 1.15rem; color: var(--fg);"></h3>
+      <span class="dim-badge"
+            x-show="$store.hrApp.panel && $store.hrApp.panel.dimension"
+            x-text="$store.hrApp.panel ? $store.hrApp.panel.dimension : ''"
+            style="background: var(--accent); color: var(--accent-fg); padding: 0.2rem 0.6rem;
+                   border-radius: 4px; font-size: 0.8rem;"></span>
+      <button @click="$store.hrApp.closePanel()"
+              style="background: none; border: none; color: var(--muted); cursor: pointer;
+                     font-size: 1.25rem; padding: 0.25rem 0.5rem;">✕</button>
+    </header>
+    <div class="hr-side-panel__body">
+      <template x-if="$store.hrApp.panel && $store.hrApp.panel.contexts.length === 0">
+        <p style="color: var(--muted); font-style: italic;">No context samples available for this item.</p>
+      </template>
+      <template x-for="ctx in $store.hrApp.panel ? $store.hrApp.panel.contexts : []" :key="ctx.id">
+        <article class="context-card" style="background: var(--card-bg);
+                                              border: 1px solid var(--card-border);
+                                              border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+          <p class="context-zh" x-text="ctx.original"
+             style="color: var(--fg); margin: 0 0 0.5rem 0; font-size: 0.95rem;"></p>
+          <p class="context-en" x-text="ctx.translated"
+             style="color: var(--muted); margin: 0 0 0.75rem 0; font-size: 0.9rem; font-style: italic;"></p>
+          <footer style="display: flex; justify-content: space-between;
+                         color: var(--muted); font-size: 0.8rem;">
+            <span x-text="ctx.source"></span>
+            <span x-text="ctx.year"></span>
+          </footer>
+        </article>
+      </template>
+    </div>
+  </aside>
+
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
   <script>
     mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });
+
+    // Stage 2: ECharts 4 图表统一管理 (dispose + reinit 主题切换)
+    window.__hrCharts = {};
+    window.__hrOpts = {
+      sunburst:    {{ sunburst_json|safe }},
+      streamgraph: {{ streamgraph_json|safe }},
+      network:     {{ network_json|safe }},
+      sankey:      {{ sankey_json|safe }},
+    };
+
+    function applyTheme(opt, theme) {
+      const isDark = theme === 'dark';
+      const fg = isDark ? '#e6e6e6' : '#222';
+      const muted = isDark ? '#8b95a1' : '#666';
+      opt = JSON.parse(JSON.stringify(opt));
+      opt.textStyle = Object.assign({}, opt.textStyle, { color: fg });
+      if (opt.title) opt.title.textStyle = Object.assign({}, opt.title.textStyle, { color: fg });
+      ['xAxis', 'yAxis'].forEach(k => {
+        if (opt[k]) {
+          opt[k] = Object.assign({}, opt[k], {
+            axisLine: { lineStyle: { color: muted } },
+            axisLabel: { color: muted },
+            splitLine: { lineStyle: { color: muted, opacity: 0.2 } },
+          });
+        }
+      });
+      if (opt.legend) opt.legend.textStyle = Object.assign({}, opt.legend.textStyle, { color: fg });
+      return opt;
+    }
+
+    function bindClickHandlers(chart, chartId) {
+      chart.on('click', function(params) {
+        if (chartId === 'echarts-network' && params.dataType === 'node') {
+          const kw = params.data.name;
+          const contexts = (window.__hrContextIndex.keywords[kw] || []).slice(0, 3);
+          window.Alpine.store('hrApp').openPanel({
+            type: 'node',
+            title: window.__hrTranslate(kw),
+            dimension: window.__hrTranslate(params.data.category || ''),
+            contexts: contexts,
+          });
+        } else if (chartId === 'echarts-sankey' && params.dataType === 'edge') {
+          const stripPrefix = s => (s || '').replace(/^stage\d+_/, '');
+          const source = stripPrefix(params.data.source);
+          const target = stripPrefix(params.data.target);
+          // 关键: 与 build_context_index 保持一致 — 排序后的 a->b 字符串
+          const pair = [source, target].sort();
+          const edgeKey = `${pair[0]}->${pair[1]}`;
+          const contexts = (window.__hrContextIndex.sankey[edgeKey] || []).slice(0, 3);
+          window.Alpine.store('hrApp').openPanel({
+            type: 'link',
+            title: `${window.__hrTranslate(source)} → ${window.__hrTranslate(target)}`,
+            contexts: contexts,
+          });
+        }
+        // 其它点击 (axisLabel / legend / 空白) → 不响应, panel 保持
+      });
+    }
+
+    function buildChart(chartId, opt) {
+      const el = document.getElementById(chartId);
+      if (!el) return;
+      if (window.__hrCharts[chartId]) {
+        window.__hrCharts[chartId].dispose();
+      }
+      opt = applyTheme(opt, document.documentElement.dataset.theme);
+      const chart = echarts.init(el);
+      chart.setOption(opt);
+      window.__hrCharts[chartId] = chart;
+      bindClickHandlers(chart, chartId);
+      return chart;
+    }
+
+    function rebuildAllCharts() {
+      buildChart('echarts-sunburst',     window.__hrOpts.sunburst);
+      buildChart('echarts-streamgraph',  window.__hrOpts.streamgraph);
+      buildChart('echarts-network',      window.__hrOpts.network);
+      buildChart('echarts-sankey',       window.__hrOpts.sankey);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof echarts === 'undefined') {
+        document.querySelectorAll('.echarts-chart').forEach(el => {
+          el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">Load failed</div>';
+        });
+        return;
+      }
+      rebuildAllCharts();
+    });
   </script>
 
 </body>

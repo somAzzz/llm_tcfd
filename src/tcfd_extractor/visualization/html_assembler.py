@@ -75,4 +75,6 @@ def assemble_html(
         module_graph_svg=module_graph_svg,
         refactor_stats=refactor_stats or {},
         build_date=build_date or date.today().isoformat(),
+        translate_map_json="{}",   # Stage 2: filled by Chunk 4
+        context_index_json="{}",   # Stage 2: filled by Chunk 4
     )
