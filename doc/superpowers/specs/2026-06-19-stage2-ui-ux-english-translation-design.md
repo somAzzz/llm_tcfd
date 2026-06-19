@@ -488,7 +488,10 @@ function bindClickHandlers(chart, chartId) {
       const stripPrefix = s => (s || '').replace(/^stage\d+_/, '');
       const source = stripPrefix(params.data.source);
       const target = stripPrefix(params.data.target);
-      const edgeKey = `${source}->${target}`;
+      // 关键: 与 §8 build_context_index 保持一致 — 排序后的 a->b 字符串
+      // 否则 click 永远 miss (reviewer 反馈)
+      const pair = [source, target].sort();
+      const edgeKey = `${pair[0]}->${pair[1]}`;
       const contexts = (window.__hrContextIndex.sankey[edgeKey] || []).slice(0, 3);
       window.Alpine.store('hrApp').openPanel({
         type: 'link',
@@ -583,7 +586,7 @@ def build_context_index(eval_dir, years: list[int]) -> dict:
         if not jsonl.exists():
             continue
         with jsonl.open(encoding="utf-8") as f:
-            for line in f:
+            for line_no, line in enumerate(f, 1):
                 r = json.loads(line)
                 if not r.get("is_tcfd_related"):
                     continue
@@ -591,7 +594,7 @@ def build_context_index(eval_dir, years: list[int]) -> dict:
                 if not ctx:
                     continue
                 entry = {
-                    "id": f"{year}-{r.get('file','')}-{id(r)}",  # 用 id(record) 保证唯一
+                    "id": f"{year}-{r.get('file','')}-{line_no}",  # 用 (year, file, line_no) 保证唯一且可测试
                     "original": ctx,
                     "translated": translate_smart(ctx),
                     "source": r.get("file", "").split("/")[-1],
@@ -640,6 +643,13 @@ return HTML_TEMPLATE.render(
 - 加 3 sample 限制 + 压缩后注入 ~2.0-2.5MB (经 gzip 后)
 
 **风险**: 接近 3.5MB 验证上限. 实施时先 dry-run 测一次大小, 超过 3MB 则降到 2 sample; 仍超 1 sample; 最坏情况放弃 sankey 索引 (只保留 keywords, sankey 点击显示 "No context available").
+
+**Hard-fail log line**: 任一降级路径触发时, `html_assembler.py` 强制 `logger.warning(...)` 输出:
+- 3 sample → 2 sample: `"Sankey context index > 3MB, reducing to 2 sample per keyword"`
+- 2 sample → 1 sample: `"Sankey context index > 3MB, reducing to 1 sample per keyword"`
+- 1 sample → 放弃 sankey: `"Sankey context index > 3MB even at 1 sample, DROPPING sankey index, only keywords will show context"`
+
+这样部署后用户能从 build log 看到哪条降级路径生效, 便于追踪 HTML 体积异常.
 
 ## 9. 关键决策
 
