@@ -157,16 +157,21 @@ class TestDarkThemePalette:
 
     def test_policy_color_uses_bright_blue(self):
         # 暗色友好: 亮蓝替代 #1f77b4
-        c = TCFD_THEME_CONFIG["colors"]["policy"]
-        assert c.startswith("#") and len(c) == 7
+        assert TCFD_THEME_CONFIG["colors"]["policy"] == "#58a6ff"
 
     def test_market_color_uses_bright_orange(self):
-        c = TCFD_THEME_CONFIG["colors"]["market"]
-        assert c.startswith("#") and len(c) == 7
+        # 暗色友好: 亮橙替代 #ff7f0e
+        assert TCFD_THEME_CONFIG["colors"]["market"] == "#f0883e"
 
     def test_tech_color_uses_bright_green(self):
-        c = TCFD_THEME_CONFIG["colors"]["tech"]
-        assert c.startswith("#") and len(c) == 7
+        # 暗色友好: 亮绿替代 #2ca02c
+        assert TCFD_THEME_CONFIG["colors"]["tech"] == "#56d364"
+
+    def test_palette_uses_dark_friendly_bright_colors(self):
+        """Spec §6.2: 暗色背景下用亮色调 (替代 Stage 1 暗色调)."""
+        assert TCFD_THEME_CONFIG["colors"]["policy"] == "#58a6ff"
+        assert TCFD_THEME_CONFIG["colors"]["market"] == "#f0883e"
+        assert TCFD_THEME_CONFIG["colors"]["tech"] == "#56d364"
 
     def test_tooltip_text_color_is_white_for_dark(self):
         # 暗色默认下 tooltip 文字白色
@@ -180,12 +185,14 @@ class TestDarkThemePalette:
 
 
 def _has_no_cjk(s: str) -> bool:
-    """Spec §5.3: 标题/副标题不含中文 (CJK Unified Ideographs)。
+    """Returns True iff `s` contains no CJK Unified Ideographs (U+4E00..U+9FFF).
 
-    允许 ASCII、ASCII 标点、以及箭头/emoji 等非 CJK Unicode 符号
-    (spec 设计中 sankey 副标题用 →, network 副标题用 ⚠️)。
+    Used to verify English-ification: any Chinese characters anywhere in the
+    string would fail this check. Non-CJK Unicode (arrows like →, emoji like
+    ⚠️, Latin extended, etc.) is permitted — these are intentional design
+    choices, not Chinese text.
     """
-    return not any(0x4E00 <= ord(c) <= 0x9FFF for c in s)
+    return all(not (0x4E00 <= ord(c) <= 0x9FFF) for c in s)
 
 
 class TestBuildersEnglishTitles:
