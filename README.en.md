@@ -2,7 +2,7 @@
 
 > A Chinese-language NLP system for extracting **TCFD** (Task Force on Climate-related Financial Disclosures) keywords from annual reports of A-share listed companies in China, with subsequent co-occurrence analysis, semantic validation, K-Means clustering, and LLM-based TCFD relevance evaluation.
 
-[中文版本](./README.md)
+[中文版本](./README.zh.md)
 
 ---
 
