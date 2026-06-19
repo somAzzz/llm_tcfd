@@ -1,7 +1,6 @@
 """Static matplotlib charts for the HR report."""
 from __future__ import annotations
 
-import base64
 import io
 
 import matplotlib
@@ -11,55 +10,6 @@ import networkx as nx
 
 matplotlib.rcParams["font.sans-serif"] = ["WenQuanYi Zen Hei", "SimHei", "DejaVu Sans"]
 matplotlib.rcParams["axes.unicode_minus"] = False
-
-
-def build_refactor_bar(
-    god_class_lines_before: int,
-    god_class_lines_after: int,
-    total_module_lines: int,
-    module_count: int,
-    test_count_before: int,
-    test_count_after: int,
-) -> str:
-    """Build a before/after horizontal bar chart. Returns base64 PNG."""
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-
-    ax = axes[0]
-    bars = ax.barh(
-        ["Before\n(refactor)", "After\n(refactor)"],
-        [god_class_lines_before, god_class_lines_after],
-        color=["#d62728", "#2ca02c"],
-    )
-    ax.set_title(f"God-Class Lines: {god_class_lines_before} → {god_class_lines_after}", fontsize=12)
-    ax.set_xlabel("Lines of Code")
-    ax.invert_yaxis()
-    for bar, value in zip(bars, [god_class_lines_before, god_class_lines_after]):
-        ax.text(value + 10, bar.get_y() + bar.get_height() / 2, str(value), va="center")
-
-    ax = axes[1]
-    bars = ax.barh(
-        ["Before\n(refactor)", "After\n(refactor)"],
-        [test_count_before, test_count_after],
-        color=["#d62728", "#2ca02c"],
-    )
-    ax.set_title(f"Test Count: {test_count_before} → {test_count_after}", fontsize=12)
-    ax.set_xlabel("Tests Passing")
-    ax.invert_yaxis()
-    for bar, value in zip(bars, [test_count_before, test_count_after]):
-        ax.text(value + 1, bar.get_y() + bar.get_height() / 2, str(value), va="center")
-
-    fig.suptitle(
-        f"Engineering Refactor: 1 God-Class → {module_count} Focused Modules ({total_module_lines} lines total)",
-        fontsize=13,
-        fontweight="bold",
-    )
-    fig.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode("ascii")
 
 
 def build_module_graph_svg(modules: dict[str, list[str]]) -> str:

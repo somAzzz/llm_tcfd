@@ -2,11 +2,10 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from tcfd_extractor.visualization.html_assembler import assemble_html
-from tcfd_extractor.visualization.static_charts import (
-    build_module_graph_svg,
-    build_refactor_bar,
-)
+from tcfd_extractor.visualization.static_charts import build_module_graph_svg
 
 
 def _make_min_results(tmp_path: Path) -> Path:
@@ -40,7 +39,6 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64=build_refactor_bar(468, 79, 1004, 10, 16, 165),
             module_graph_svg=build_module_graph_svg({"config": [], "evaluator": ["config"]}),
         )
         assert len(html) > 1000
@@ -51,7 +49,6 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
             refactor_stats={"test_after": 165, "test_before": 16},
         )
@@ -62,19 +59,17 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "What is this project" in html
         assert "What we built" in html
         assert "What we discovered" in html
-        assert "Engineering excellence" in html
+        assert "Robust AI Pipeline Engineering" in html
 
     def test_charts_json_inlined(self, tmp_path):
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert 'id="echarts-sunburst"' in html
@@ -88,7 +83,6 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="iVBORw0KGgoAAAANSUhEUgAA",
             module_graph_svg="<svg></svg>",
             refactor_stats={"god_class_before": 0, "god_class_after": 0, "module_count": 0,
                             "total_lines": 0, "test_before": 0, "test_after": 0},
@@ -106,7 +100,6 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "Beyond TCFD" in html
@@ -116,20 +109,22 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
-            module_graph_svg='<svg id="my-graph"></svg>',
+            module_graph_svg="",
         )
-        assert "my-graph" in html
-        assert "Tech Deep Dive" in html
+        assert "echarts-module-graph" in html
+        assert "Module Dependency Graph" in html
 
-    def test_refactor_chart_inlined(self, tmp_path):
+    def test_pipeline_health_chart_inlined(self, tmp_path):
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="iVBORw0KGgoAAAANSUhEUgAA",
             module_graph_svg="<svg></svg>",
         )
-        assert "data:image/png;base64,iVBORw" in html
+        assert "echarts-pipeline-health-dashboard" in html
+        assert "Stochastic-to-Deterministic Defense" in html
+        assert "Memory-Safe Streaming" in html
+        assert "Comprehensive Observability" in html
+        assert "pipelineHealthDashboard" in html
 
 
 class TestBuildContextIndex:
@@ -198,7 +193,6 @@ class TestContextInjection:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "window.__hrTranslateMap" in html
@@ -210,7 +204,6 @@ class TestContextInjection:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "window.__hrContextIndex" in html
@@ -224,7 +217,6 @@ class TestStage2TemplateContent:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert 'data-theme="dark"' in html
@@ -234,7 +226,6 @@ class TestStage2TemplateContent:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "Inter:wght" in html
@@ -245,7 +236,6 @@ class TestStage2TemplateContent:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "alpinejs@3.13" in html
@@ -256,9 +246,58 @@ class TestStage2TemplateContent:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "hr-side-panel" in html
         assert "z-index: 1000" in html
         assert "hr-side-panel-backdrop" in html
+
+
+class TestDataclassDefaultEncoder:
+    """_dataclass_default JSON encoder: serialize PipelineMetric instances
+    that build_pipeline_health_dashboard embeds in bar data."""
+
+    def test_serializes_dataclass_to_dict(self):
+        from dataclasses import dataclass
+        from tcfd_extractor.visualization.html_assembler import _dataclass_default
+
+        @dataclass
+        class Point:
+            x: int
+            y: int
+
+        result = _dataclass_default(Point(3, 4))
+        assert result == {"x": 3, "y": 4}
+
+    def test_rejects_non_dataclass(self):
+        from tcfd_extractor.visualization.html_assembler import _dataclass_default
+
+        with pytest.raises(TypeError):
+            _dataclass_default("not a dataclass")
+
+    def test_serializes_real_pipeline_metric(self):
+        """The full path: build_pipeline_health_dashboard embeds PipelineMetric
+        in bar data, which json.dumps must serialize via _dataclass_default."""
+        import json as _json
+        from tcfd_extractor.visualization.html_assembler import _dataclass_default
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        from tcfd_extractor.visualization.pipeline_metrics import (
+            ALL_STATIC_METRICS, TEST_COVERAGE_TEMPLATE, PipelineMetric,
+        )
+
+        test_coverage = PipelineMetric(
+            name=TEST_COVERAGE_TEMPLATE.name,
+            unit=TEST_COVERAGE_TEMPLATE.unit,
+            before=16,
+            after=329,
+            note=TEST_COVERAGE_TEMPLATE.note,
+        )
+        metrics = (*ALL_STATIC_METRICS, test_coverage)
+        opt = build_pipeline_health_dashboard(metrics, {"text_style": {"color": "#fff"}, "colors": {"tech": "#0f0"}})
+
+        # Without the encoder, this would raise TypeError on the PipelineMetric instances.
+        json_str = _json.dumps(opt, default=_dataclass_default)
+        parsed = _json.loads(json_str)
+        # First bar's metric should be a dict with all dataclass fields
+        assert parsed["series"][0]["data"][0]["metric"]["name"] == "Memory Footprint"
+        assert parsed["series"][0]["data"][0]["metric"]["unit"] == "GB"

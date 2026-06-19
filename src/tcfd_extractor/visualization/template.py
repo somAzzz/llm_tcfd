@@ -184,6 +184,38 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       from { transform: translateX(0); }
       to { transform: translateX(100%); }
     }
+    .engineering-layout-grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+      margin-top: 1rem;
+    }
+    .engineering-specs {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .spec-card {
+      background: rgba(255, 255, 255, 0.02);
+      border-left: 3px solid var(--accent, #56d364);
+      border-radius: 4px;
+      padding: 0.85rem 1rem;
+    }
+    .spec-card h3 {
+      margin: 0 0 0.4rem 0;
+      font-size: 1.05rem;
+      color: var(--accent, #56d364);
+    }
+    .spec-card p {
+      margin: 0;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: var(--text-muted, #8b949e);
+    }
+    @media (max-width: 900px) {
+      .engineering-layout-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body x-data x-init="
@@ -200,6 +232,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     openPanel(data) { this.panel = data; },
     closePanel() { this.panel = null; },
   });
+  Alpine.store('pipelineUi', { showDeepDive: false });
 ">
   <button @click="$store.hrApp.toggleTheme()"
           class="hr-theme-toggle"
@@ -292,26 +325,56 @@ flowchart LR
       <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:480px;"></div>
     </section>
 
-    <section>
-      <h2>4. Engineering excellence</h2>
-      <p>
-        The original 468-line god class has been decomposed into focused modules
-        with a significant increase in test coverage.
-      </p>
-      <div style="text-align: center; margin: 1rem 0;">
-        <img src="data:image/png;base64,{{ refactor_b64 }}"
-             alt="Refactor before/after chart"
-             style="max-width: 100%; height: auto; border: 1px solid var(--card-border); border-radius: 4px;">
+    <section class="engineering-excellence">
+      <h2>4. Robust AI Pipeline Engineering</h2>
+      <p class="subtitle">How we transformed a volatile LLM script into a
+         fault-tolerant, industry-grade text processing mill.</p>
+
+      <div class="engineering-layout-grid">
+        <div id="echarts-pipeline-health-dashboard"
+             class="echarts-chart"
+             style="width:100%; height:380px;"></div>
+
+        <div class="engineering-specs">
+          <div class="spec-card">
+            <h3>&#x1F6E1;&#xFE0F; Stochastic-to-Deterministic Defense</h3>
+            <p>Deploying a local 35B model presents non-deterministic JSON
+               deformations. We implemented a Pydantic-driven validation
+               guardrail featuring a strict exception hierarchy
+               (<code>LLMResponseParseError</code>) and automatic
+               token-rate-limiting. Raw responses are safely isolated and logged
+               without halting the entire multi-year batch run.</p>
+          </div>
+          <div class="spec-card">
+            <h3>&#x26A1;&#xFE0F; Memory-Safe Streaming &amp; Concurrency</h3>
+            <p>Processing 10,814 files sequentially triggers tight coupling and
+               out-of-memory stalls. The refactored pipeline decouples
+               orchestration into 8 single-responsibility submodules, shifting
+               to a generator-based stream architecture. Controlled by a
+               <code>ThreadPoolExecutor</code> semaphore, the pipeline achieved
+               zero-leak concurrency across 25 years of financial reports.</p>
+          </div>
+          <div class="spec-card">
+            <h3>&#x1F52C; Comprehensive Observability</h3>
+            <p>To eliminate regressions caused by LLM prompt tuning, we expanded
+               the test suite from 16 baseline specs to
+               <strong>329+ automated tests</strong>. New evaluation submodules
+               maintain a 95%&ndash;100% coverage rate, wrapping the entire AI
+               infrastructure in a transparent, highly verifiable test harness.</p>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="$store.pipelineUi.showDeepDive" x-transition.opacity.duration.300ms
+           style="margin-top: 1rem;">
+        <h3 style="margin-top: 1rem; color: var(--accent);">
+          &#x1F9E9; Module Dependency Graph (click any bar to collapse)
+        </h3>
+        <p>Hover a module to highlight its import dependencies.</p>
+        <div id="echarts-module-graph" class="echarts-chart"
+             style="width:100%; height:480px;"></div>
       </div>
     </section>
-
-    <details class="tech-deep-dive">
-      <summary>🔬 Tech Deep Dive — Module Dependency Graph (click to expand)</summary>
-      <div>
-        <p>Evaluation modules + shared config + tests. Arrows = import direction.</p>
-        {{ module_graph_svg | safe }}
-      </div>
-    </details>
 
     <footer>
       <p>Built {{ build_date }} · Source available on request · All data anonymized</p>
@@ -381,6 +444,8 @@ flowchart LR
       streamgraph: {{ streamgraph_json|safe }},
       network:     {{ network_json|safe }},
       sankey:      {{ sankey_json|safe }},
+      moduleGraph: {{ module_graph_json|safe }},
+      pipelineHealthDashboard: {{ pipeline_health_dashboard_json|safe }},
     };
 
     function applyTheme(opt, theme) {
@@ -453,11 +518,38 @@ flowchart LR
     }
 
     function rebuildAllCharts() {
-      buildChart('echarts-sunburst',     window.__hrOpts.sunburst);
-      buildChart('echarts-streamgraph',  window.__hrOpts.streamgraph);
-      buildChart('echarts-network',      window.__hrOpts.network);
-      buildChart('echarts-sankey',       window.__hrOpts.sankey);
+      buildChart('echarts-sunburst',             window.__hrOpts.sunburst);
+      buildChart('echarts-streamgraph',          window.__hrOpts.streamgraph);
+      buildChart('echarts-network',              window.__hrOpts.network);
+      buildChart('echarts-sankey',               window.__hrOpts.sankey);
+      buildChart('echarts-module-graph',         window.__hrOpts.moduleGraph);
+      buildChart('echarts-pipeline-health-dashboard', window.__hrOpts.pipelineHealthDashboard);
+      bindPipelineHealthClickHandler();
     }
+
+    function bindPipelineHealthClickHandler() {
+      const el = document.getElementById('echarts-pipeline-health-dashboard');
+      if (!el || !window.__hrCharts['echarts-pipeline-health-dashboard']) return;
+      const chart = window.__hrCharts['echarts-pipeline-health-dashboard'];
+      chart.off('click');   // prevent duplicate handlers on rebuildAllCharts()
+      chart.on('click', function () { window.__hrToggleDeepDive(); });
+    }
+
+    // Toggle the hidden Module Dependency Graph on any bar click.
+    window.__hrToggleDeepDive = function () {
+      if (!window.Alpine) return;
+      const s = Alpine.store('pipelineUi');
+      s.showDeepDive = !s.showDeepDive;
+      if (s.showDeepDive) {
+        Alpine.nextTick(function () {
+          const el = document.getElementById('echarts-module-graph');
+          if (el && window.echarts) {
+            const inst = echarts.getInstanceByDom(el);
+            if (inst) inst.resize();   // prevent 0x0 hidden canvas
+          }
+        });
+      }
+    };
 
     document.addEventListener('DOMContentLoaded', function() {
       if (typeof echarts === 'undefined') {

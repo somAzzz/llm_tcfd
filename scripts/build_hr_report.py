@@ -24,47 +24,6 @@ from datetime import date
 from pathlib import Path
 
 
-def get_git_lines_before(path: Path) -> int:
-    """Return the line count of `path` at the initial commit (ab40b09), or 0."""
-    try:
-        result = subprocess.run(
-            ["git", "show", "ab40b09:src/tcfd_extractor/evaluation/cooccurrence_evaluator.py"],
-            capture_output=True, text=True, check=False,
-        )
-        if result.returncode == 0:
-            return len(result.stdout.splitlines())
-    except Exception:
-        pass
-    return 0
-
-
-def get_current_lines(path: Path) -> int:
-    try:
-        text = path.read_text(encoding="utf-8")
-        return len(text.splitlines())
-    except Exception:
-        return 0
-
-
-def get_module_stats() -> tuple[int, int, int]:
-    """Return (total_lines, module_count, test_count_after)."""
-    eval_dir = Path("src/tcfd_extractor/evaluation")
-    py_files = [p for p in eval_dir.glob("*.py") if p.name != "__init__.py"]
-    total = sum(len(p.read_text(encoding="utf-8").splitlines()) for p in py_files)
-    module_count = len(py_files)
-    try:
-        result = subprocess.run(
-            ["uv", "run", "pytest", "--collect-only", "-q", "tests/"],
-            capture_output=True, text=True, check=False,
-        )
-        for line in result.stdout.splitlines() + result.stderr.splitlines():
-            if "tests collected" in line:
-                return total, module_count, int(line.split()[0])
-    except Exception:
-        pass
-    return total, module_count, 0
-
-
 def get_test_count_before() -> int:
     """Count tests at the pre-refactor baseline by parsing ab40b09's test file."""
     try:
@@ -80,6 +39,26 @@ def get_test_count_before() -> int:
     except Exception:
         pass
     return 16
+
+
+def _run_pytest_collect() -> int:
+    """Run `pytest --collect-only -q` and return the test count.
+
+    Tries `pytest` directly first (fast path when already inside a uv env),
+    then falls back to `uv run pytest` if the bare command isn't on PATH.
+    Returns 0 on failure (the build proceeds; the warning in main() covers it).
+    """
+    # Stable substring across pytest 7/8/9: "X tests collected"
+    for cmd in (["pytest", "--collect-only", "-q", "tests/"],
+                ["uv", "run", "pytest", "--collect-only", "-q", "tests/"]):
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            for line in result.stdout.splitlines() + result.stderr.splitlines():
+                if "tests collected" in line:
+                    return int(line.split()[0])
+        except Exception:
+            continue
+    return 0
 
 
 def main() -> int:
@@ -105,17 +84,9 @@ def main() -> int:
     output_dir: Path = args.output
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Gather stats
-    god_class_path = Path("src/tcfd_extractor/evaluation/cooccurrence_evaluator.py")
-    god_class_lines_before = get_git_lines_before(god_class_path)
-    if god_class_lines_before < 100:
-        print(
-            f"WARNING: git show ab40b09 returned only {god_class_lines_before} lines "
-            f"(expected ~468). Check the commit ref and file path.",
-            file=sys.stderr,
-        )
-    god_class_lines_after = get_current_lines(god_class_path)
-    total_module_lines, module_count, test_count_after = get_module_stats()
+    # Compute test counts (kept; old god-class metric helpers removed).
+    test_count_before = get_test_count_before()
+    test_count_after = _run_pytest_collect()
 
     if test_count_after < 50:
         print(
@@ -124,18 +95,18 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    test_count_before = get_test_count_before()
-
-    print("Building refactor bar chart...")
-    from tcfd_extractor.visualization.static_charts import build_refactor_bar
-    refactor_b64 = build_refactor_bar(
-        god_class_lines_before=god_class_lines_before,
-        god_class_lines_after=god_class_lines_after,
-        total_module_lines=total_module_lines,
-        module_count=module_count,
-        test_count_before=test_count_before,
-        test_count_after=test_count_after,
+    # Stage 5: 构建 4 个 PipelineMetric (3 静态 + 1 动态 Test Coverage)
+    from tcfd_extractor.visualization.pipeline_metrics import (
+        ALL_STATIC_METRICS, TEST_COVERAGE_TEMPLATE, PipelineMetric,
     )
+    test_coverage = PipelineMetric(
+        name=TEST_COVERAGE_TEMPLATE.name,
+        unit=TEST_COVERAGE_TEMPLATE.unit,
+        before=test_count_before,
+        after=test_count_after,
+        note=TEST_COVERAGE_TEMPLATE.note,
+    )
+    pipeline_metrics = [*ALL_STATIC_METRICS, test_coverage]
 
     print("Building module graph SVG (via AST discovery)...")
     from tcfd_extractor.visualization.module_graph import discover_module_graph
@@ -147,13 +118,9 @@ def main() -> int:
     from tcfd_extractor.visualization.html_assembler import assemble_html
     html = assemble_html(
         results_root=Path("output/evaluate_cooccurrence"),
-        refactor_bar_b64=refactor_b64,
+        pipeline_metrics=pipeline_metrics,
         module_graph_svg=module_svg,
         refactor_stats={
-            "god_class_before": god_class_lines_before,
-            "god_class_after": god_class_lines_after,
-            "module_count": module_count,
-            "total_lines": total_module_lines,
             "test_before": test_count_before,
             "test_after": test_count_after,
         },
