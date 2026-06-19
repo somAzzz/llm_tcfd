@@ -444,6 +444,7 @@ flowchart LR
       streamgraph: {{ streamgraph_json|safe }},
       network:     {{ network_json|safe }},
       sankey:      {{ sankey_json|safe }},
+      moduleGraph: {{ module_graph_json|safe }},
       pipelineHealthDashboard: {{ pipeline_health_dashboard_json|safe }},
     };
 
@@ -521,6 +522,7 @@ flowchart LR
       buildChart('echarts-streamgraph',          window.__hrOpts.streamgraph);
       buildChart('echarts-network',              window.__hrOpts.network);
       buildChart('echarts-sankey',               window.__hrOpts.sankey);
+      buildChart('echarts-module-graph',         window.__hrOpts.moduleGraph);
       buildChart('echarts-pipeline-health-dashboard', window.__hrOpts.pipelineHealthDashboard);
       bindPipelineHealthClickHandler();
     }

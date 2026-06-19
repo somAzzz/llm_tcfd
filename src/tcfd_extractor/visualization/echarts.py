@@ -444,3 +444,41 @@ def build_pipeline_health_dashboard(
         },
     ]
     return opt
+
+
+def build_module_graph(
+    graph: dict[str, list[str]],
+    theme: dict,
+) -> dict:
+    """Build a force-directed graph ECharts option from a module→deps mapping.
+
+    `graph` shape: `{"config": [], "evaluator": ["config"], ...}` —
+    returned by `discover_module_graph()` in `module_graph.py`.
+
+    Empty dict → empty graph (caller must handle this with try/except).
+    """
+    nodes = [{"id": name, "name": name, "category": 0} for name in graph]
+    links = [
+        {"source": src, "target": tgt}
+        for src, deps in graph.items()
+        for tgt in deps
+    ]
+    opt = _get_base_option(
+        "Module Dependency Graph",
+        "Hover a module to highlight its dependencies",
+    )
+    opt["title"]["left"] = "center"
+    opt["tooltip"] = {"formatter": "{b}"}
+    opt["series"] = [
+        {
+            "type": "graph",
+            "layout": "force",
+            "data": nodes,
+            "links": links,
+            "force": {"repulsion": 200, "edgeLength": 80},
+            "emphasis": {"focus": "adjacency", "lineStyle": {"width": 3}},
+            "label": {"show": True, "position": "right", "fontSize": 12},
+            "lineStyle": {"color": "source", "curveness": 0.1, "opacity": 0.6},
+        }
+    ]
+    return opt

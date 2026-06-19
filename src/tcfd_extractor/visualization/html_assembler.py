@@ -1,12 +1,26 @@
 """Assembles the final HTML by rendering the Jinja2 template with all data."""
 from __future__ import annotations
 
+import dataclasses
 import json as _json
 import logging
 from datetime import date
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def _dataclass_default(obj):
+    """JSON encoder fallback: convert dataclass instances to dicts.
+
+    `build_pipeline_health_dashboard` embeds `PipelineMetric` instances in
+    each bar's data payload (used by the tooltip formatter).  Standard
+    `json.dumps` cannot serialize them, so we register this `default` to
+    turn any dataclass into `dataclasses.asdict(...)`.
+    """
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return dataclasses.asdict(obj)
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 from .data_loader import (
     load_network_data,
@@ -17,6 +31,7 @@ from .data_loader import (
 from .echarts import (
     TCFD_THEME_CONFIG,
     build_network,
+    build_pipeline_health_dashboard,
     build_sankey,
     build_streamgraph,
     build_sunburst,
@@ -83,8 +98,9 @@ def build_context_index(eval_dir: Path, years: list[int]) -> dict:
 def assemble_html(
     results_root: Path,
     *,
-    refactor_bar_b64: str,
+    refactor_bar_b64: str = "",
     module_graph_svg: str,
+    pipeline_metrics: list | None = None,
     refactor_stats: dict | None = None,
     build_date: str | None = None,
 ) -> str:
@@ -118,6 +134,37 @@ def assemble_html(
     network_json = _json.dumps(network_opt, ensure_ascii=False)
     sankey_json = _json.dumps(sankey_opt, ensure_ascii=False)
 
+    # Stage 5: 构建 AI Pipeline Health Dashboard (4 个 PipelineMetric)
+    from tcfd_extractor.visualization.pipeline_metrics import (
+        ALL_STATIC_METRICS, TEST_COVERAGE_TEMPLATE, PipelineMetric,
+    )
+    from tcfd_extractor.visualization.echarts import build_module_graph
+    from tcfd_extractor.visualization.module_graph import discover_module_graph
+
+    if pipeline_metrics is None:
+        refactor_stats = refactor_stats or {}
+        test_coverage = PipelineMetric(
+            name=TEST_COVERAGE_TEMPLATE.name,
+            unit=TEST_COVERAGE_TEMPLATE.unit,
+            before=refactor_stats.get("test_before", 16),
+            after=refactor_stats.get("test_after", 0) or 0,
+            note=TEST_COVERAGE_TEMPLATE.note,
+        )
+        pipeline_metrics = [*ALL_STATIC_METRICS, test_coverage]
+
+    dashboard_opt = build_pipeline_health_dashboard(pipeline_metrics, TCFD_THEME_CONFIG)
+
+    # Module graph: AST-discovered dependencies → ECharts option
+    eval_modules_dir = Path("src/tcfd_extractor/evaluation")
+    module_graph_data = discover_module_graph(eval_modules_dir)
+    if module_graph_data:
+        module_graph_opt = build_module_graph(module_graph_data, TCFD_THEME_CONFIG)
+    else:
+        module_graph_opt = {"series": [{"type": "graph", "data": [], "links": []}]}
+
+    pipeline_health_dashboard_json = _json.dumps(dashboard_opt, ensure_ascii=False, default=_dataclass_default)
+    module_graph_json = _json.dumps(module_graph_opt, ensure_ascii=False, default=_dataclass_default)
+
     # Stage 2: 注入 context 索引 (与 load_network_data 的 years 参数一致)
     context_index = build_context_index(eval_dir=eval_dir, years=[2022, 2023, 2024])
     context_index_json = _json.dumps(context_index, ensure_ascii=False)
@@ -128,6 +175,9 @@ def assemble_html(
         streamgraph_json=streamgraph_json,
         network_json=network_json,
         sankey_json=sankey_json,
+        pipeline_health_dashboard_json=pipeline_health_dashboard_json,
+        module_graph_json=module_graph_json,
+        # Kept for backward compat (template no longer uses these)
         refactor_b64=refactor_bar_b64,
         module_graph_svg=module_graph_svg,
         refactor_stats=refactor_stats or {},

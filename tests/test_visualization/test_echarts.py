@@ -709,3 +709,44 @@ class TestPipelineHealthDashboard:
         opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
         assert opt["legend"]["data"] == ["Before (god-class)", "After (refactored)"]
 
+
+class TestBuildModuleGraph:
+    """Tests for build_module_graph (ECharts option for dependency graph)."""
+
+    def test_empty_graph_returns_skeleton(self):
+        from tcfd_extractor.visualization.echarts import build_module_graph
+        opt = build_module_graph({}, TCFD_THEME_CONFIG)
+        assert opt["title"]["text"] == "Module Dependency Graph"
+        assert opt["series"][0]["type"] == "graph"
+        assert opt["series"][0]["data"] == []
+        assert opt["series"][0]["links"] == []
+
+    def test_nodes_match_module_names(self):
+        from tcfd_extractor.visualization.echarts import build_module_graph
+        opt = build_module_graph(
+            {"config": [], "evaluator": ["config"], "chunker": ["config"]},
+            TCFD_THEME_CONFIG,
+        )
+        node_ids = {n["id"] for n in opt["series"][0]["data"]}
+        assert node_ids == {"config", "evaluator", "chunker"}
+
+    def test_links_capture_all_dependencies(self):
+        from tcfd_extractor.visualization.echarts import build_module_graph
+        opt = build_module_graph(
+            {"config": [], "evaluator": ["config"], "chunker": ["config", "evaluator"]},
+            TCFD_THEME_CONFIG,
+        )
+        links = opt["series"][0]["links"]
+        assert {"source": "evaluator", "target": "config"} in links
+        assert {"source": "chunker", "target": "config"} in links
+        assert {"source": "chunker", "target": "evaluator"} in links
+
+    def test_force_layout_enabled(self):
+        from tcfd_extractor.visualization.echarts import build_module_graph
+        opt = build_module_graph(
+            {"a": ["b"], "b": []}, TCFD_THEME_CONFIG,
+        )
+        force = opt["series"][0]["force"]
+        assert "repulsion" in force
+        assert "edgeLength" in force
+

@@ -3,10 +3,7 @@ import json
 from pathlib import Path
 
 from tcfd_extractor.visualization.html_assembler import assemble_html
-from tcfd_extractor.visualization.static_charts import (
-    build_module_graph_svg,
-    build_refactor_bar,
-)
+from tcfd_extractor.visualization.static_charts import build_module_graph_svg
 
 
 def _make_min_results(tmp_path: Path) -> Path:
@@ -40,7 +37,6 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64=build_refactor_bar(468, 79, 1004, 10, 16, 165),
             module_graph_svg=build_module_graph_svg({"config": [], "evaluator": ["config"]}),
         )
         assert len(html) > 1000
@@ -51,7 +47,6 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
             refactor_stats={"test_after": 165, "test_before": 16},
         )
@@ -62,19 +57,17 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "What is this project" in html
         assert "What we built" in html
         assert "What we discovered" in html
-        assert "Engineering excellence" in html
+        assert "Robust AI Pipeline Engineering" in html
 
     def test_charts_json_inlined(self, tmp_path):
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert 'id="echarts-sunburst"' in html
@@ -88,7 +81,6 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="iVBORw0KGgoAAAANSUhEUgAA",
             module_graph_svg="<svg></svg>",
             refactor_stats={"god_class_before": 0, "god_class_after": 0, "module_count": 0,
                             "total_lines": 0, "test_before": 0, "test_after": 0},
@@ -106,7 +98,6 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "Beyond TCFD" in html
@@ -116,20 +107,22 @@ class TestAssembleHtml:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
-            module_graph_svg='<svg id="my-graph"></svg>',
+            module_graph_svg="",
         )
-        assert "my-graph" in html
-        assert "Tech Deep Dive" in html
+        assert "echarts-module-graph" in html
+        assert "Module Dependency Graph" in html
 
-    def test_refactor_chart_inlined(self, tmp_path):
+    def test_pipeline_health_chart_inlined(self, tmp_path):
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="iVBORw0KGgoAAAANSUhEUgAA",
             module_graph_svg="<svg></svg>",
         )
-        assert "data:image/png;base64,iVBORw" in html
+        assert "echarts-pipeline-health-dashboard" in html
+        assert "Stochastic-to-Deterministic Defense" in html
+        assert "Memory-Safe Streaming" in html
+        assert "Comprehensive Observability" in html
+        assert "pipelineHealthDashboard" in html
 
 
 class TestBuildContextIndex:
@@ -198,7 +191,6 @@ class TestContextInjection:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "window.__hrTranslateMap" in html
@@ -210,7 +202,6 @@ class TestContextInjection:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "window.__hrContextIndex" in html
@@ -224,7 +215,6 @@ class TestStage2TemplateContent:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert 'data-theme="dark"' in html
@@ -234,7 +224,6 @@ class TestStage2TemplateContent:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "Inter:wght" in html
@@ -245,7 +234,6 @@ class TestStage2TemplateContent:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "alpinejs@3.13" in html
@@ -256,7 +244,6 @@ class TestStage2TemplateContent:
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
-            refactor_bar_b64="x",
             module_graph_svg="<svg></svg>",
         )
         assert "hr-side-panel" in html
