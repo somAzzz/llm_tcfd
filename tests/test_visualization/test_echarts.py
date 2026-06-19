@@ -405,10 +405,22 @@ class TestTitleDoesNotOverlapChartContent:
             f"sunburst center y={center_y_pct}% should be >= 50% (lower) for title clearance"
 
     def test_sankey_top_matches_other_charts(self):
-        """Sankey series.top 应该和 sunburst/network 一致, 都用 CHART_CONTENT_TOP=120。"""
+        """Sankey series.top 应该和 sunburst/network 一致, 都用 CHART_CONTENT_TOP=130。"""
         opt = build_sankey({"nodes": [{"name": "x"}], "links": []}, TCFD_THEME_CONFIG)
-        # Stage 3.3 round 4: top = 120 给标题和 force-layout 节点足够空间
-        assert opt["series"][0]["top"] == 120
+        # Stage 3.3 round 5: top = 130 给 force-layout 节点最终的安全余量
+        assert opt["series"][0]["top"] == 130
+
+    def test_network_repulsion_increased_to_spread_nodes(self):
+        """Stage 3.3 round 5: repulsion 80→150, 节点更分散避免压标题。"""
+        data = {
+            "nodes": [{"id": "a", "name": "a", "symbolSize": 15, "category": "Policy", "value": 1}],
+            "links": [],
+        }
+        opt = build_network(data, TCFD_THEME_CONFIG)
+        assert opt["series"][0]["force"]["repulsion"] >= 120, (
+            f"network repulsion={opt['series'][0]['force']['repulsion']} too low, "
+            "top nodes will overlap title"
+        )
 
     def test_sunburst_radius_reduced_to_avoid_title_overlap(self):
         """Sunburst 外圈半径 ≤ 85%, 避免外圈边缘压到 subtext。"""
