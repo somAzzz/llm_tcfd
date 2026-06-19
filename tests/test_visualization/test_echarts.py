@@ -455,3 +455,88 @@ class TestTitleDoesNotOverlapChartContent:
             f"grid.top={opt['grid']['top']} not enough below legend.top="
             f"{opt['legend']['top']}; chart may overlap legend"
         )
+
+
+class TestSunburstOutermostRingDarkBlue:
+    """Stage 4 修复: sunburst 最外圈 (keyword 层级) 改成深蓝色, 而不是默认白/浅色。
+
+    用户反馈: "把sunburst的最下面那层改成深蓝色, 而不是白色"
+    - "最下面那层" = 最外圈 (leaf/keyword 层级, 视觉上离中心最远)
+    - 实现方式: ECharts sunburst 的 levels 配置按深度索引, levels[3] 对应
+      keyword 层, 用 itemStyle.color 覆盖默认白/浅色
+    """
+
+    def test_sunburst_has_levels_config(self):
+        """Sunburst series 必须有 levels 配置, 用于控制每层颜色。"""
+        data = [{"name": "Policy", "children": [
+            {"name": "Cluster A", "children": [{"name": "kw1", "value": 1}]}
+        ]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        assert "levels" in opt["series"][0], (
+            "sunburst series must have 'levels' config to control per-depth colors"
+        )
+
+    def test_sunburst_outermost_ring_is_dark_blue(self):
+        """最外圈 (keyword 层) itemStyle.color 必须是深蓝色 (hex, RGB < 50)。"""
+        data = [{"name": "Policy", "children": [
+            {"name": "Cluster A", "children": [{"name": "kw1", "value": 1}]}
+        ]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        levels = opt["series"][0]["levels"]
+        # 最后一层 (keyword) 必须是深蓝色, RGB 各通道 < 80
+        outermost = levels[-1]
+        assert "itemStyle" in outermost, (
+            f"outermost level (keyword) must have itemStyle.color, got: {outermost}"
+        )
+        color = outermost["itemStyle"].get("color", "")
+        assert color.startswith("#") and len(color) == 7, (
+            f"outermost color must be hex format like #0a1929, got: {color}"
+        )
+        # 验证是深色 (R, G, B 各 < 80)
+        r = int(color[1:3], 16)
+        g = int(color[3:5], 16)
+        b = int(color[5:7], 16)
+        assert max(r, g, b) < 80, (
+            f"outermost color {color} not dark enough (R={r}, G={g}, B={b}); "
+            "should be dark blue like #0a1929"
+        )
+        # 蓝色应该是主导通道 (B > R, B > G)
+        assert b > r and b > g, (
+            f"outermost color {color} should be blue-dominant (B > R and B > G)"
+        )
+
+    def test_sunburst_dim_level_keeps_bright_colors(self):
+        """3 个 dim 层级 (Policy/Market/Technology) 必须保持各自的亮色。"""
+        data = [{"name": "Policy", "children": [{"name": "A", "children": []}]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        levels = opt["series"][0]["levels"]
+        # dim 层 (depth=1) itemStyle.color 应该是 TCFD_THEME_CONFIG 的 3 个 dim 颜色
+        dim_level = levels[1]
+        assert "itemStyle" in dim_level, "dim level missing itemStyle.color"
+        dim_colors = dim_level["itemStyle"]["color"]
+        # dim_colors 必须是 list, 含 3 个 hex
+        assert isinstance(dim_colors, list) and len(dim_colors) == 3, (
+            f"dim level color must be list of 3 hex, got: {dim_colors}"
+        )
+        expected = [
+            TCFD_THEME_CONFIG["colors"]["policy"],
+            TCFD_THEME_CONFIG["colors"]["market"],
+            TCFD_THEME_CONFIG["colors"]["tech"],
+        ]
+        for c in expected:
+            assert c in dim_colors, f"missing dim color {c} in levels[1]: {dim_colors}"
+
+    def test_sunburst_levels_count_matches_tree_depth(self):
+        """levels 列表长度必须 ≥ 4 (dim + cluster + keyword + 兜底层)。
+
+    ECharts sunburst levels 是按 depth 索引, 我们的 3-level 树
+    (dim → cluster → keyword) 至少需要 4 项 (0 兜底 + 1 dim + 2 cluster + 3 keyword)。
+        """
+        data = [{"name": "Policy", "children": [
+            {"name": "Cluster A", "children": [{"name": "kw1", "value": 1}]}
+        ]}]
+        opt = build_sunburst(data, TCFD_THEME_CONFIG)
+        levels = opt["series"][0]["levels"]
+        assert len(levels) >= 4, (
+            f"sunburst must have ≥4 levels (dim/cluster/keyword + fallback), got {len(levels)}"
+        )

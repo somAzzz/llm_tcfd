@@ -186,11 +186,13 @@ def test_load_sunburst_translates_realistic_chinese_math_labels(tmp_path):
 
     result = load_sunburst_data(clusters_dir)
 
-    # 节能减排 在 dict 中 → "Energy Saving & Emission Reduction"
+    # Stage 4 修复: 93 个真实 math_label 全部进 dict, 应直接显示英文
     cluster_names = [c["name"] for c in result[0]["children"]]
+    # 排放限值 现在在 dict → "Emission Cap"
+    assert "Emission Cap" in cluster_names
+    # 节能减排 在 dict 中 → "Energy Saving & Emission Reduction"
     assert "Energy Saving & Emission Reduction" in cluster_names
     # 不在 dict 的中文 → fallback "Cluster {id}"
-    assert "Cluster 0" in cluster_names  # 排放限值 未在 dict
     assert "Cluster 2" in cluster_names  # 未知中文标签XYZ
     # 不能有 [[ZH: ...]] wrapper
     for c in cluster_names:

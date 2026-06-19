@@ -95,11 +95,21 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
 
     Stage 3.3 修复: 设置 series.top/bottom/left/right 显式避开标题块,
     避免外圈压在标题文字上。
+
+    Stage 4 修复: 加 levels 配置, 最外圈 (keyword 层级) 用深蓝色 #0a1929,
+    替代默认白/浅色 (用户反馈 "把sunburst的最下面那层改成深蓝色")。
+    levels 按 depth 索引: levels[1]=dim, levels[2]=cluster, levels[3]=keyword。
     """
     opt = _get_base_option(
         "TCFD Dimensions & Clusters",
         "Click a node to drill down"
     )
+    # Stage 4: 3 个 dim 颜色用作 dim 层 (depth=1) 的 itemStyle.color list
+    dim_colors = [
+        theme["colors"]["policy"],
+        theme["colors"]["market"],
+        theme["colors"]["tech"],
+    ]
     opt["series"] = [{
         "type": "sunburst",
         "data": data,
@@ -121,6 +131,21 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
         "sort": None,
         "animation": theme["animation"],
         "animationDuration": theme["animation_duration"],
+        # Stage 4: 按深度控制每层颜色
+        # levels[0] 兜底 (无节点), levels[1]=dim, levels[2]=cluster, levels[3]=keyword
+        "levels": [
+            {},  # 0: 兜底
+            {  # 1: dim (Policy/Market/Technology) - 亮色
+                "itemStyle": {"color": dim_colors},
+            },
+            {  # 2: cluster - 沿用 dim 颜色淡化 (用饱和度低一些的灰色)
+                "itemStyle": {"color": "#3a4554"},
+            },
+            {  # 3: keyword (最外圈) - 深蓝色, 替代默认白/浅色
+                "itemStyle": {"color": "#0a1929", "borderColor": "#1f3a5a",
+                              "borderWidth": 1},
+            },
+        ],
     }]
     return opt
 
