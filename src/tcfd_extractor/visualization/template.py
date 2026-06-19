@@ -9,6 +9,7 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TCFD Project Demo — Climate Disclosure Analysis</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <style>
     :root {
       --bg: #fafafa;
@@ -164,14 +165,20 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
       <p>Below: 3 维聚类层级下钻 (Sunburst) — 点击节点下钻到关键词。</p>
       <div id="echarts-sunburst" class="echarts-chart" style="width:100%; height:400px;"></div>
       <script>
-try {
-    echarts.init(document.getElementById('echarts-sunburst'))
-        .setOption({{ sunburst_json|safe }});
-} catch (e) {
-    var el = document.getElementById('echarts-sunburst');
-    el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败, 请检查数据格式</div>';
-    console.error('Sunburst render failed:', e);
-}
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof echarts === 'undefined') {
+        document.getElementById('echarts-sunburst').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">ECharts CDN 加载失败</div>';
+        console.error('ECharts not loaded');
+        return;
+    }
+    try {
+        echarts.init(document.getElementById('echarts-sunburst'))
+            .setOption({{ sunburst_json|safe }});
+    } catch (e) {
+        document.getElementById('echarts-sunburst').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败, 请检查数据格式</div>';
+        console.error('Sunburst render failed:', e);
+    }
+});
 </script>
     </section>
 
@@ -214,21 +221,30 @@ flowchart LR
       </p>
       <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:400px;"></div>
       <script>
-try { echarts.init(document.getElementById('echarts-streamgraph')).setOption({{ streamgraph_json|safe }}); } catch (e) { var el = document.getElementById('echarts-streamgraph'); el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Streamgraph:', e); }
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof echarts === 'undefined') { console.error('ECharts not loaded'); return; }
+    try { echarts.init(document.getElementById('echarts-streamgraph')).setOption({{ streamgraph_json|safe }}); } catch (e) { document.getElementById('echarts-streamgraph').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Streamgraph:', e); }
+});
 </script>
 
       <h3 style="margin-top: 2rem;">关键词共现网络 (近 3 年)</h3>
       <p>可拖拽节点, hover 显示共现次数。</p>
       <div id="echarts-network" class="echarts-chart" style="width:100%; height:500px;"></div>
       <script>
-try { echarts.init(document.getElementById('echarts-network')).setOption({{ network_json|safe }}); } catch (e) { var el = document.getElementById('echarts-network'); el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:500px;">图表渲染失败</div>'; console.error('Network:', e); }
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof echarts === 'undefined') { console.error('ECharts not loaded'); return; }
+    try { echarts.init(document.getElementById('echarts-network')).setOption({{ network_json|safe }}); } catch (e) { document.getElementById('echarts-network').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:500px;">图表渲染失败</div>'; console.error('Network:', e); }
+});
 </script>
 
       <h3 style="margin-top: 2rem;">NLP 流水线数据提纯 (Sankey)</h3>
       <p>10,814 份报告 → 分块 → 披露 → 维度归类。</p>
       <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:400px;"></div>
       <script>
-try { echarts.init(document.getElementById('echarts-sankey')).setOption({{ sankey_json|safe }}); } catch (e) { var el = document.getElementById('echarts-sankey'); el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Sankey:', e); }
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof echarts === 'undefined') { console.error('ECharts not loaded'); return; }
+    try { echarts.init(document.getElementById('echarts-sankey')).setOption({{ sankey_json|safe }}); } catch (e) { document.getElementById('echarts-sankey').innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">图表渲染失败</div>'; console.error('Sankey:', e); }
+});
 </script>
     </section>
 
@@ -262,8 +278,6 @@ try { echarts.init(document.getElementById('echarts-sankey')).setOption({{ sanke
   <script>
     mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });
   </script>
-
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 
 </body>
 </html>
