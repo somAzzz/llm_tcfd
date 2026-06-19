@@ -643,6 +643,15 @@ git commit -m "feat(template): Stage 5.3 — Section 4 narrative + Alpine pipeli
 
 ## Chunk 2: Wire new dashboard into html_assembler, remove old static chart, update build script, end-to-end verification
 
+**Prerequisite**: Chunk 2 depends on Chunk 1's commits (Tasks 1, 2, 3). Specifically:
+- Task 1 must commit `pipeline_metrics.py` (provides `ALL_STATIC_METRICS`, `TEST_COVERAGE_TEMPLATE`, `PipelineMetric`).
+- Task 2 must commit `build_pipeline_health_dashboard` (imported by Task 4) and replace `build_refactor_dashboard` (so Task 4's import doesn't break).
+- Task 3 must update `template.py` so the `pipeline_health_dashboard_json` template variable exists.
+
+If you run Chunk 2 standalone, the html_assembler test in Step 4.5 will fail with `jinja2.UndefinedError` (template expects `pipeline_health_dashboard_json` but it isn't passed) or `ImportError` (the old `build_refactor_dashboard` is gone but `html_assembler.py` still imports it).
+
+**Execute Chunk 1 first, verify it passes, then proceed to Chunk 2.**
+
 ### Task 4: Update `html_assembler.py` — drop `refactor_bar_b64` + `_build_refactor_dashboard_data`, accept metrics kwarg, render new dashboard
 
 **Files:**
@@ -787,10 +796,29 @@ with:
 
 - [ ] **Step 4.4: Update `tests/test_visualization/test_html_assembler.py`**
 
-This file has 14 occurrences of `refactor_bar_b64` plus other affected assertions. The cleanest fix is a series of `sed` edits:
+This file has 14 occurrences of `refactor_bar_b64` plus other affected assertions. The cleanest fix is a series of `sed` edits + a manual import cleanup:
+
+**Pre-step**: Remove the `build_refactor_bar` import (lines 6-9):
+
+```python
+# Replace the multi-line import block:
+from tcfd_extractor.visualization.static_charts import (
+    build_module_graph_svg,
+    build_refactor_bar,
+)
+# with just:
+from tcfd_extractor.visualization.static_charts import build_module_graph_svg
+```
+
+(Without this, Task 5 will leave a dangling import and break the file.)
+
+**Then run the sed edits**:
 
 Run: `sed -i 's/refactor_bar_b64=build_refactor_bar([^)]*)//g' tests/test_visualization/test_html_assembler.py`
 Expected: removes the kwarg from every `assemble_html(...)` call.
+
+Run: `sed -i 's/build_refactor_bar([^)]*)//g' tests/test_visualization/test_html_assembler.py`
+Expected: removes any orphan `build_refactor_bar(...)` invocations left over after the first sed.
 
 Run: `sed -i 's/, refactor_bar_b64="[^"]*"//g; s/refactor_bar_b64="[^"]*"//g' tests/test_visualization/test_html_assembler.py`
 Expected: removes any string-form `refactor_bar_b64=` kwargs (zero matches expected).
@@ -834,9 +862,9 @@ git commit -m "feat(assembler): Stage 5.4 — drop refactor_bar_b64 + _build_ref
 
 Open `src/tcfd_extractor/visualization/static_charts.py`. Delete the entire `build_refactor_bar(...)` function (lines 16-62 inclusive). The remaining function `build_module_graph_svg` (lines 65+) stays unchanged.
 
-- [ ] **Step 5.2: Verify matplotlib and networkx imports still needed**
+- [ ] **Step 5.2: Drop the now-unused `base64` import**
 
-After deleting `build_refactor_bar`, check whether `matplotlib`, `io`, and `base64` are still used by `build_module_graph_svg`. They are (the SVG function uses `matplotlib.use("Agg")`, `plt.subplots`, `nx.draw_networkx_*`). No import changes needed.
+`build_refactor_bar` was the only consumer of `import base64` at line 4 of `static_charts.py`. After deleting it, `base64` becomes dead code. Remove that single import line (keep `import io` — it's still used by `build_module_graph_svg` for the `BytesIO` buffer).
 
 - [ ] **Step 5.3: Delete `TestBuildRefactorBar` test class**
 
@@ -922,20 +950,22 @@ Add a new helper function above `main()` (insert right after `get_test_count_bef
 
 ```python
 def _run_pytest_collect() -> int:
-    """Run `uv run pytest --collect-only -q` and return the test count.
+    """Run `pytest --collect-only -q` and return the test count.
 
+    Tries `pytest` directly first (fast path when already inside a uv env),
+    then falls back to `uv run pytest` if the bare command isn't on PATH.
     Returns 0 on failure (the build proceeds; the warning in main() covers it).
     """
-    try:
-        result = subprocess.run(
-            ["uv", "run", "pytest", "--collect-only", "-q", "tests/"],
-            capture_output=True, text=True, check=False,
-        )
-        for line in result.stdout.splitlines() + result.stderr.splitlines():
-            if "tests collected" in line:
-                return int(line.split()[0])
-    except Exception:
-        pass
+    # Stable substring across pytest 7/8/9: "X tests collected"
+    for cmd in (["pytest", "--collect-only", "-q", "tests/"],
+                ["uv", "run", "pytest", "--collect-only", "-q", "tests/"]):
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            for line in result.stdout.splitlines() + result.stderr.splitlines():
+                if "tests collected" in line:
+                    return int(line.split()[0])
+        except Exception:
+            continue
     return 0
 ```
 
@@ -999,17 +1029,19 @@ If any match found, delete it (most likely a stale test assertion or a leftover 
 - [ ] **Step 7.2: Run the full visualization test suite**
 
 Run: `PYTHONPATH=src uv run pytest tests/test_visualization/ -v 2>&1 | tail -20`
-Expected: all tests pass; total count ≥ 178 (was 171 + 5 new metrics + 8 new dashboard − 4 old dashboard − 2 old bar ≈ 178).
+Expected: all tests pass; total count ≥ 184 (baseline 177 + 5 new metrics + 8 new dashboard − 4 old dashboard − 2 old bar = +7 net).
 
 - [ ] **Step 7.3: Run the full project test suite (excluding known-broken modules)**
 
-Run: `PYTHONPATH=src uv run pytest tests/ -v --ignore=tests/test_annual_report_cleaner.py --ignore=tests/test_clustering/test_clustering.py 2>&1 | tail -10`
-Expected: ≥ 329 passing tests (matches the Section 4 "329+" KPI).
+Run: `PYTHONPATH=src uv run pytest tests/ -v --ignore=tests/test_annual_report_cleaner.py --ignore=tests/test_clustering/test_clustering.py --ignore=tests/test_clustering/test_ingestion.py 2>&1 | tail -10`
+Expected: ≥ 329 passing tests (matches the Section 4 "329+" KPI). The `test_ingestion.py` ignore is needed because of a `libcudnn.so.9` collection error unrelated to this work.
 
 - [ ] **Step 7.4: Final end-to-end build**
 
-Run: `rm -rf /tmp/hr_report_final && python scripts/build_hr_report.py --output /tmp/hr_report_final/ 2>&1 | tail -5`
+Run: `rm -rf /tmp/hr_report_final && python scripts/build_hr_report.py --output /tmp/hr_report_final/ --target github-pages 2>&1 | tail -5`
 Expected: `✅ Build complete. Report at: /tmp/hr_report_final/index.html`.
+
+(The `--target github-pages` flag is explicit to match the production deploy: the report loads ECharts + Alpine + Mermaid via CDN, identical to what GitHub Pages will serve. Using `--target email-attachment` would change the visual behavior since that target inlines the JS.)
 
 - [ ] **Step 7.5: Spot-check the new Section 4 visually**
 
