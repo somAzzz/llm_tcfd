@@ -87,6 +87,45 @@ CHART_CONTENT_TOP = 130
 CHART_CONTENT_BOTTOM = 40
 
 
+# JS formatter source strings for build_pipeline_health_dashboard.
+# Receives `params.data.metric` and returns a formatted string.
+_LABEL_FN = (
+    "function (params) {"
+    "  var m = params.data && params.data.metric;"
+    "  if (!m) return String(params.value);"
+    "  var v = (m.unit === 'tests') ? Math.round(params.value) : params.value;"
+    "  return v + ' ' + m.unit;"
+    "}"
+)
+
+_PIPELINE_HEALTH_TOOLTIP_FN = (
+    "function (params) {"
+    "  return params.map(function (p) {"
+    "    var m = p.data && p.data.metric;"
+    "    if (!m) return p.seriesName + ': ' + p.value;"
+    "    return p.seriesName + ' \u00b7 ' + p.name + '<br/>'"
+    "      + '<b>' + p.value + ' ' + m.unit + '</b><br/>'"
+    "      + '<span style=\"color:#8b949e;font-size:11px\">' + m.note + '</span>';"
+    "  }).join('<hr/>');"
+    "}"
+)
+
+_WRAP_XAXIS_FN = (
+    "function (value) {"
+    "  if (value.length <= 14) return value;"
+    "  var words = value.split(' ');"
+    "  var line = '', lines = [];"
+    "  for (var i = 0; i < words.length; i++) {"
+    "    if ((line + ' ' + words[i]).trim().length > 14) {"
+    "      lines.push(line.trim()); line = words[i];"
+    "    } else { line = line + ' ' + words[i]; }"
+    "  }"
+    "  if (line) lines.push(line.trim());"
+    "  return lines.join('\\n');"
+    "}"
+)
+
+
 # builder 函数将在 Task 2.2-2.5 添加
 
 
@@ -319,4 +358,89 @@ def build_sankey(data: dict, theme: dict) -> dict:
         "left": 20, "right": 100,
         "top": CHART_CONTENT_TOP, "bottom": CHART_CONTENT_BOTTOM,
     }]
+    return opt
+
+
+def build_pipeline_health_dashboard(
+    metrics: list["PipelineMetric"],
+    theme: dict,
+) -> dict:
+    """Build the AI Pipeline Resilience & Engineering Health ECharts option.
+
+    Each metric becomes a grouped bar pair (Before / After).
+    Y-axis is hidden; per-bar label shows formatted value with unit.
+    Inherits `_get_base_option()` styling (chart background, text style,
+    animation) so the dashboard participates in the `applyTheme()` cycle
+    used by the other 4 ECharts dashboards in the report.
+    """
+    from tcfd_extractor.visualization.pipeline_metrics import PipelineMetric
+
+    metrics = list(metrics)  # accept any iterable
+    bar_labels = [m.name for m in metrics]
+    before_vals = [m.before for m in metrics]
+    after_vals = [m.after for m in metrics]
+
+    opt = _get_base_option(
+        "AI Pipeline Resilience & Engineering Health",
+        "Click any bar to view the module graph",
+    )
+    opt["title"]["left"] = "center"
+    opt["title"]["textStyle"] = {
+        **theme.get("text_style", {}),
+        "fontWeight": 600,
+        "fontSize": 16,
+    }
+    opt["tooltip"] = {
+        "trigger": "axis",
+        "axisPointer": {"type": "shadow"},
+        "formatter": _PIPELINE_HEALTH_TOOLTIP_FN,
+    }
+    opt["legend"] = {
+        "data": ["Before (god-class)", "After (refactored)"],
+        "top": 32,
+        "textStyle": theme.get("text_style", {}),
+    }
+    opt["grid"] = {"left": 50, "right": 30, "top": 80, "bottom": 50}
+    opt["xAxis"] = {
+        "type": "category",
+        "data": bar_labels,
+        "axisLabel": {
+            "color": theme.get("text_style", {}).get("color", "#c9d1d9"),
+            "interval": 0,
+            "fontSize": 11,
+            "formatter": _WRAP_XAXIS_FN,
+        },
+    }
+    opt["yAxis"] = {"type": "value", "show": False}
+    opt["color"] = ["#8b3a3a", "#56d364"]
+    opt["series"] = [
+        {
+            "name": "Before (god-class)",
+            "type": "bar",
+            "data": [
+                {"value": v, "metric": m} for v, m in zip(before_vals, metrics)
+            ],
+            "label": {
+                "show": True,
+                "position": "top",
+                "color": theme.get("text_style", {}).get("color", "#c9d1d9"),
+                "formatter": _LABEL_FN,
+            },
+            "emphasis": {"focus": "series"},
+        },
+        {
+            "name": "After (refactored)",
+            "type": "bar",
+            "data": [
+                {"value": v, "metric": m} for v, m in zip(after_vals, metrics)
+            ],
+            "label": {
+                "show": True,
+                "position": "top",
+                "color": theme.get("colors", {}).get("tech", "#56d364"),
+                "formatter": _LABEL_FN,
+            },
+            "emphasis": {"focus": "series"},
+        },
+    ]
     return opt

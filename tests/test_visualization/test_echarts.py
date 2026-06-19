@@ -639,3 +639,73 @@ class TestSunburstOutermostRingDarkBlue:
         assert "#7ee787" in dim_colors, (
             f"Technology dim color must be #7ee787 (Stage 4 r3 bright), got: {dim_colors}"
         )
+
+
+class TestPipelineHealthDashboard:
+    """Tests for the Section 4 AI Pipeline Resilience dashboard (8 tests)."""
+
+    @staticmethod
+    def _metrics():
+        from tcfd_extractor.visualization.pipeline_metrics import (
+            ALL_STATIC_METRICS, TEST_COVERAGE_TEMPLATE, PipelineMetric,
+        )
+        test_coverage = PipelineMetric(
+            name=TEST_COVERAGE_TEMPLATE.name,
+            unit=TEST_COVERAGE_TEMPLATE.unit,
+            before=16,
+            after=329,
+            note=TEST_COVERAGE_TEMPLATE.note,
+        )
+        return (*ALL_STATIC_METRICS, test_coverage)
+
+    def test_title_text_matches(self):
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
+        assert opt["title"]["text"] == "AI Pipeline Resilience & Engineering Health"
+
+    def test_x_axis_has_four_metric_names(self):
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
+        assert opt["xAxis"]["data"] == [
+            "Memory Footprint", "Concurrency & Decoupling",
+            "Output Schema Compliance", "Test Coverage",
+        ]
+
+    def test_two_series_with_correct_colors(self):
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
+        assert opt["color"] == ["#8b3a3a", "#56d364"]
+
+    def test_y_axis_hidden(self):
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
+        assert opt["yAxis"]["show"] is False
+
+    def test_bar_label_shows_with_formatter(self):
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
+        for s in opt["series"]:
+            assert s["label"]["show"] is True
+            assert s["label"]["position"] == "top"
+            assert "formatter" in s["label"]
+
+    def test_tooltip_formatter_present(self):
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
+        assert "formatter" in opt["tooltip"]
+        assert opt["tooltip"]["trigger"] == "axis"
+
+    def test_each_bar_data_carries_metric_for_tooltip(self):
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        metrics = self._metrics()
+        opt = build_pipeline_health_dashboard(metrics, TCFD_THEME_CONFIG)
+        for series in opt["series"]:
+            for datum, m in zip(series["data"], metrics):
+                assert datum["metric"] is m
+                assert datum["value"] in (m.before, m.after)
+
+    def test_legend_lists_before_and_after(self):
+        from tcfd_extractor.visualization.echarts import build_pipeline_health_dashboard
+        opt = build_pipeline_health_dashboard(self._metrics(), TCFD_THEME_CONFIG)
+        assert opt["legend"]["data"] == ["Before (god-class)", "After (refactored)"]
+
