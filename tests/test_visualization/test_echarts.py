@@ -286,6 +286,12 @@ class TestLabelsHiddenByDefault:
         opt = build_sankey(data, TCFD_THEME_CONFIG)
         series = opt["series"][0]
         assert series["label"].get("show") is False, "sankey label.show must be False"
+        # Stage 3.1 修复: edgeLabel 也必须默认隐藏 (避免边上数字常年显示)
+        assert series.get("edgeLabel", {}).get("show") is False, \
+            "sankey edgeLabel.show must be False"
+        # emphasis 时显示
+        assert series["emphasis"].get("edgeLabel", {}).get("show") is True, \
+            "sankey emphasis.edgeLabel.show must be True (hover reveals edge label)"
 
 
 class TestChartBackgroundMatchesDark:

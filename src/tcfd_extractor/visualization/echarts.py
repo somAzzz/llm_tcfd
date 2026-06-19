@@ -193,8 +193,8 @@ def build_network(data: dict, theme: dict) -> dict:
 def build_sankey(data: dict, theme: dict) -> dict:
     """Sankey: 4-stage pipeline, namespace prefix on nodes.
 
-    Stage 3 修复: label.show=False (默认不显示), 鼠标悬停时 ECharts
-    自动用 emphasis.label 显示节点名 (formatter 仍生效)。
+    Stage 3 修复: 节点 label (label) + 边 label (edgeLabel) 都默认隐藏,
+    鼠标悬停时 ECharts 通过 emphasis 自动显示 (formatter 仍生效)。
     """
     opt = _get_base_option(
         "NLP Pipeline Data Refinement",
@@ -207,12 +207,19 @@ def build_sankey(data: dict, theme: dict) -> dict:
         "emphasis": {
             "focus": "adjacency",
             "label": {"show": True, "fontSize": 12, "color": "#fff"},
+            "edgeLabel": {"show": True, "fontSize": 11, "color": "#e6e6e6"},
         },
         "lineStyle": {"color": "gradient", "curveness": 0.5},
         "label": {
             "show": False,
             "formatter": theme["sankey_label_formatter"],
             "fontSize": 11,
+        },
+        # 边 (link) 上的 label — 默认隐藏, 悬停显示
+        "edgeLabel": {
+            "show": False,
+            "formatter": theme["sankey_label_formatter"],
+            "fontSize": 10,
         },
         "left": 20, "right": 100, "top": 60, "bottom": 20,
     }]
