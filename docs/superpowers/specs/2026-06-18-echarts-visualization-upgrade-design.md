@@ -61,7 +61,7 @@
   template.py [修改]  →  ECharts CDN (替代 Plotly CDN) + 渲染 try/catch 包装
                           │
                           ▼
-  output/hr_report/index.html (单文件, 1.5-2MB, ECharts ~1MB + 4 图 inline JSON ~500KB + 模板 ~50KB)
+  output/report/index.html (单文件, 1.5-2MB, ECharts ~1MB + 4 图 inline JSON ~500KB + 模板 ~50KB)
 ```
 
 **核心约束**: Python 端只生成 ECharts **option dict** (JSON 序列化), 不做渲染。 浏览器加载 ECharts CDN + 解析 inline JSON + 渲染交互图。
@@ -79,7 +79,7 @@
 | `tests/test_visualization/test_echarts.py` | **新建** | 4 个 builder 骨架断言测试 |
 | `tests/test_visualization/test_data_loader.py` | **扩展** | 4 个新聚合方法单元测试 |
 | `tests/test_visualization/test_html_assembler.py` | **扩展** | 1 个集成测试: 4 图 inline JSON 存在 |
-| `scripts/build_hr_report.py` | **小改** | 输出大小预期从 3-4MB 调整为 1.5-2MB |
+| `scripts/build_report.py` | **小改** | 输出大小预期从 3-4MB 调整为 1.5-2MB |
 
 **新建 2 + 扩展 2 + 修改 2 + 删除 1 + 配置改 1** = 8 个文件改动。
 
@@ -285,7 +285,7 @@ def test_sankey_option_skeleton():
 - 修改: `src/tcfd_extractor/visualization/template.py` (~20 行变更)
 - 删除: `src/tcfd_extractor/visualization/chart_builders.py` (~150 行)
 - 修改: `pyproject.toml` (移除 plotly 依赖)
-- 修改: `scripts/build_hr_report.py` (输出大小预期文案)
+- 修改: `scripts/build_report.py` (输出大小预期文案)
 - 修改: `README.md` (HR 报告章节加 "ECharts 4 个高级图" 说明)
 
 **净代码变化**: +约 800 行, -约 150 行, **净增 ~650 行** (其中 ~50% 是测试)
@@ -320,11 +320,11 @@ def test_sankey_option_skeleton():
 - [ ] `grep -r "import plotly" src/` 返回空
 - [ ] `grep -r "from tcfd_extractor.visualization.chart_builders" src/ tests/ scripts/` 返回空
 - [ ] `uv run pytest tests/test_visualization/` 全绿, 新增 ≥ 20 test
-- [ ] `python scripts/build_hr_report.py --output output/hr_report/` 退出码 0
-- [ ] `wc -c output/hr_report/index.html` 介于 1.5MB-2.0MB
-- [ ] `grep -c 'echarts.init' output/hr_report/index.html` 命中 4
-- [ ] `python scripts/check_leakage.py output/hr_report/index.html` 退出码 0
-- [ ] 浏览器打开 `output/hr_report/index.html`, 4 图渲染成功 + 客观交互检查:
+- [ ] `python scripts/build_report.py --output output/report/` 退出码 0
+- [ ] `wc -c output/report/index.html` 介于 1.5MB-2.0MB
+- [ ] `grep -c 'echarts.init' output/report/index.html` 命中 4
+- [ ] `python scripts/check_leakage.py output/report/index.html` 退出码 0
+- [ ] 浏览器打开 `output/report/index.html`, 4 图渲染成功 + 客观交互检查:
   - (a) **Sunburst**: 点击 "政策" 根 → 子聚类展开, 面包屑显示 "TCFD / 政策"
   - (b) **Streamgraph**: 拖动底部 dataZoom slider → x 轴范围从 25 年缩到所选区间
   - (c) **Network**: 鼠标拖拽任一节点 → 该节点位置变化 (其他节点按 force layout 重排)

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 复用现有 2023 年报数据, 通过 `build_hr_report.py` 生成单文件交互式 HTML, 部署到公开 GitHub Pages 仓库 `somAzzz/tcfd-report`, 拿到 `https://somAzzz.github.io/tcfd-report/` 线上 URL。
+**Goal:** 复用现有 2023 年报数据, 通过 `build_report.py` 生成单文件交互式 HTML, 部署到公开 GitHub Pages 仓库 `somAzzz/tcfd-report`, 拿到 `https://somAzzz.github.io/tcfd-report/` 线上 URL。
 
 **Architecture:** 端到端执行链: 本地 JSONL → 既有 visualization 包生成 HTML → 一次性 README 修复 (sed) → gh CLI 建仓+推送+启用 Pages → curl 验证。 不修改 visualization 包任何源代码。
 
@@ -18,13 +18,13 @@
 
 | 路径 | 性质 | 责任 |
 |---|---|---|
-| `scripts/build_hr_report.py` | 已存在, 只读 | orchestrator (调 5 个 visualization 模块 + check_leakage) |
+| `scripts/build_report.py` | 已存在, 只读 | orchestrator (调 5 个 visualization 模块 + check_leakage) |
 | `scripts/check_leakage.py` | 已存在, 只读 | 隐私泄漏校验 (公司名 + 危险模式) |
 | `src/tcfd_extractor/visualization/*.py` | 已存在, 只读 | 8 个模块 (anonymize / data_loader / chart_builders / static_charts / module_graph / html_assembler / template / translations) |
 | `output/evaluate_cooccurrence/2023/results.jsonl` | 已存在, 只读 | 2023 单年聚合数据, 报告输入 |
-| `output/hr_report/index.html` | 本次新增 (gitignored) | 单文件交互式报告, 含 3 个 Plotly + 1 个 matplotlib + 1 个 SVG |
-| `output/hr_report/README.md` | 本次新增 (gitignored) | build_hr_report.py 生成的 README, 需 sed 修复 |
-| `output/hr_report/.nojekyll` | 本次新增 (gitignored) | 禁用 GitHub Pages Jekyll 处理 |
+| `output/report/index.html` | 本次新增 (gitignored) | 单文件交互式报告, 含 3 个 Plotly + 1 个 matplotlib + 1 个 SVG |
+| `output/report/README.md` | 本次新增 (gitignored) | build_report.py 生成的 README, 需 sed 修复 |
+| `output/report/.nojekyll` | 本次新增 (gitignored) | 禁用 GitHub Pages Jekyll 处理 |
 | `somAzzz/tcfd-report` | 外部 (GitHub 公开仓) | 部署目标, 推送后由 gh CLI 创建 |
 
 **无新增源代码文件**。 整个流程是"运行既有脚本 + shell 修复 + gh CLI 部署"。
@@ -141,24 +141,24 @@ git status --short   # 确认无残留
 
 ---
 
-## Chunk 2: 运行 build_hr_report.py 生成报告
+## Chunk 2: 运行 build_report.py 生成报告
 
-**Files:** `output/hr_report/index.html`, `output/hr_report/README.md`, `output/hr_report/.nojekyll` (新增, gitignored)
+**Files:** `output/report/index.html`, `output/report/README.md`, `output/report/.nojekyll` (新增, gitignored)
 
 ### Task 2.1: 跑构建脚本
 
-- [ ] **Step 1: 执行 build_hr_report.py**
+- [ ] **Step 1: 执行 build_report.py**
 
-Run: `uv run python scripts/build_hr_report.py --output output/hr_report/ 2>&1 | tee /tmp/build_hr_report.log`
+Run: `uv run python scripts/build_report.py --output output/report/ 2>&1 | tee /tmp/build_report.log`
 Expected 关键输出行:
 - `Building refactor bar chart...`
 - `Building module graph SVG (via AST discovery)...`
 - `Assembling HTML...`
-- `Wrote output/hr_report/index.html (XXX,XXX chars)`
-- `Wrote output/hr_report/README.md`
-- `Wrote output/hr_report/.nojekyll`
+- `Wrote output/report/index.html (XXX,XXX chars)`
+- `Wrote output/report/README.md`
+- `Wrote output/report/.nojekyll`
 - `Running leakage check...`
-- `✅ Build complete. Report at: output/hr_report/index.html`
+- `✅ Build complete. Report at: output/report/index.html`
 - 退出码 = 0
 
 - [ ] **Step 2: 检查退出码**
@@ -166,13 +166,13 @@ Expected 关键输出行:
 Run: `echo "exit: $?"`
 Expected: `exit: 0`
 
-### Task 2.2: 若 build_hr_report.py 失败 (泄漏检查未过)
+### Task 2.2: 若 build_report.py 失败 (泄漏检查未过)
 
 (只在 Task 2.1 Step 2 不为 0 时执行)
 
 - [ ] **Step 1: 查看完整日志**
 
-Run: `cat /tmp/build_hr_report.log | tail -50`
+Run: `cat /tmp/build_report.log | tail -50`
 查找包含 `LEAK` 或具体公司名的行
 
 - [ ] **Step 2: 决定修复方向**
@@ -186,7 +186,7 @@ Run: `cat /tmp/build_hr_report.log | tail -50`
 
 - [ ] **Step 1: 三个文件都存在**
 
-Run: `ls -la output/hr_report/`
+Run: `ls -la output/report/`
 Expected:
 - `index.html` (大小通常 2-10 MB, 含 inline chart)
 - `README.md` (约 1-2 KB)
@@ -194,19 +194,19 @@ Expected:
 
 - [ ] **Step 2: index.html 头部和尾部 sanity check**
 
-Run: `head -c 200 output/hr_report/index.html && echo "" && tail -c 200 output/hr_report/index.html`
+Run: `head -c 200 output/report/index.html && echo "" && tail -c 200 output/report/index.html`
 Expected:
 - 头部含 `<!DOCTYPE html>` 或 `<html`
 - 尾部含 `</html>`
 
 - [ ] **Step 3: index.html 大小 sanity floor**
 
-Run: `wc -c output/hr_report/index.html`
+Run: `wc -c output/report/index.html`
 Expected: > 1,000,000 (含 3 个 Plotly + 1 个 SVG + 1 个 matplotlib, 合理最小 1MB; 若 < 500KB 视为内容缺失, 中止调查)
 
 - [ ] **Step 4: 验证关键 chart inline 数据存在**
 
-Run: `grep -c "Plotly.newPlot\|<svg\|data:image/png;base64" output/hr_report/index.html`
+Run: `grep -c "Plotly.newPlot\|<svg\|data:image/png;base64" output/report/index.html`
 Expected: 至少 3 (3 个 Plotly + 1 个 SVG + 1 个 matplotlib base64)
 
 - [ ] **Step 5: 提交 (若有意) 文档类变更**
@@ -217,15 +217,15 @@ Expected: 至少 3 (3 个 Plotly + 1 个 SVG + 1 个 matplotlib base64)
 
 ## Chunk 3: Post-build README 修复
 
-**Files:** `output/hr_report/README.md` (修改, gitignored)
+**Files:** `output/report/README.md` (修改, gitignored)
 
-**原因:** `scripts/build_hr_report.py` 写出的 README 模板硬编码 `https://<username>.github.io/tcfd-hr-report/` 和仓库名 `tcfd-hr-report`, 与本计划目标 `tcfd-report` 不一致, 必须在推送前修复。
+**原因:** `scripts/build_report.py` 写出的 README 模板硬编码 `https://<username>.github.io/tcfd-hr-report/` 和仓库名 `tcfd-hr-report`, 与本计划目标 `tcfd-report` 不一致, 必须在推送前修复。
 
 ### Task 3.1: 执行 sed 替换
 
 - [ ] **Step 1: 修复前先看现状**
 
-Run: `grep -n "tcfd-hr-report\|<username>\|tcfd-report\|somAzzz" output/hr_report/README.md`
+Run: `grep -n "tcfd-hr-report\|<username>\|tcfd-report\|somAzzz" output/report/README.md`
 Expected: README 中出现 `tcfd-hr-report` (硬编码) 和 `<username>` (占位符)
 
 - [ ] **Step 2: 执行 sed**
@@ -235,7 +235,7 @@ Run:
 sed -i.bak \
   -e 's|tcfd-hr-report|tcfd-report|g' \
   -e 's|<username>|somAzzz|g' \
-  output/hr_report/README.md
+  output/report/README.md
 ```
 
 > **平台注意**: 以上是 GNU sed 语法 (Linux 适用)。 若在 macOS 上执行, 需改为 `sed -i '' -e '...' ...` (BSD sed 要求 `''` 占位)。 本计划目标环境是 Linux, 保持 GNU 语法。
@@ -245,13 +245,13 @@ sed -i.bak \
 Run:
 ```bash
 echo "--- 替换后应命中 tcfd-report: ---"
-grep -c "tcfd-report" output/hr_report/README.md
+grep -c "tcfd-report" output/report/README.md
 echo "--- 替换后应零命中 tcfd-hr-report: ---"
-grep -c "tcfd-hr-report" output/hr_report/README.md && echo "FAIL: 还有 tcfd-hr-report 残留" || echo "OK"
+grep -c "tcfd-hr-report" output/report/README.md && echo "FAIL: 还有 tcfd-hr-report 残留" || echo "OK"
 echo "--- 替换后应零命中 <username>: ---"
-grep -c "<username>" output/hr_report/README.md && echo "FAIL: 还有 <username> 残留" || echo "OK"
+grep -c "<username>" output/report/README.md && echo "FAIL: 还有 <username> 残留" || echo "OK"
 echo "--- 应命中 somAzzz: ---"
-grep -c "somAzzz" output/hr_report/README.md
+grep -c "somAzzz" output/report/README.md
 ```
 
 Expected:
@@ -262,11 +262,11 @@ Expected:
 
 - [ ] **Step 4: 删除备份**
 
-Run: `rm output/hr_report/README.md.bak`
+Run: `rm output/report/README.md.bak`
 
 - [ ] **Step 5: 显示最终 README**
 
-Run: `cat output/hr_report/README.md`
+Run: `cat output/report/README.md`
 确认 URL 是 `https://somAzzz.github.io/tcfd-report/`, 仓库名是 `tcfd-report`
 
 ---
@@ -279,36 +279,36 @@ Run: `cat output/hr_report/README.md`
 
 - [ ] **Step 1: 二次验证泄漏检查**
 
-Run: `uv run python scripts/check_leakage.py output/hr_report/index.html 2>&1`
+Run: `uv run python scripts/check_leakage.py output/report/index.html 2>&1`
 Expected:
 - 退出码 = 0
-- 输出恰好是: `✅ Leakage check passed for output/hr_report/index.html`
+- 输出恰好是: `✅ Leakage check passed for output/report/index.html`
 - (若输出 "LEAK" 字样或公司名, 中止调查)
 
 ### Task 4.2: 列出推送内容
 
 - [ ] **Step 1: 确认推什么**
 
-Run: `ls -la output/hr_report/ && du -sh output/hr_report/`
+Run: `ls -la output/report/ && du -sh output/report/`
 Expected:
 - 3 个文件 (index.html, README.md, .nojekyll)
 - 总大小 < 20 MB (Pages 单仓 1 GB 限额足够)
 
 - [ ] **Step 2: 排除 macOS 垃圾文件**
 
-Run: `find output/hr_report/ -name ".DS_Store" -delete`
+Run: `find output/report/ -name ".DS_Store" -delete`
 (若有, 删除; 实际 Linux 仓库一般没有)
 
 ### Task 4.3: 抓取 index.html 的关键元数据
 
 - [ ] **Step 1: 检查页面 title 和 section 标题**
 
-Run: `grep -oE "<title>[^<]+</title>" output/hr_report/index.html | head -3`
+Run: `grep -oE "<title>[^<]+</title>" output/report/index.html | head -3`
 Expected: 含 "TCFD" 或 "Demo" 关键词
 
 - [ ] **Step 2: 统计 5 个 section 的图表**
 
-Run: `grep -c "id=\"section-" output/hr_report/index.html`
+Run: `grep -c "id=\"section-" output/report/index.html`
 Expected: ≥ 4 (donut / pipeline / trend+bar / refactor) + 1 details (tech deep dive)
 
 ---
@@ -345,21 +345,21 @@ Expected: 列出 index.html, README.md, .nojekyll 等
 
 ### Task 5.3: 创建仓库并推送 (干净状态)
 
-**重要前置**: `output/hr_report/` 不是 git 仓库, `gh repo create --source` 要求源是 git 仓库, 因此必须先 `git init` 并做首次提交。 全部使用绝对路径避免 cwd 漂移。
+**重要前置**: `output/report/` 不是 git 仓库, `gh repo create --source` 要求源是 git 仓库, 因此必须先 `git init` 并做首次提交。 全部使用绝对路径避免 cwd 漂移。
 
-- [ ] **Step 1: 在 output/hr_report/ 中初始化 git 仓库并首次提交**
+- [ ] **Step 1: 在 output/report/ 中初始化 git 仓库并首次提交**
 
 Run:
 ```bash
 cd /home/bo/projects/python/frequency_analyzer
 set -e  # 任一命令失败立即停
-git init output/hr_report
-git -C output/hr_report add -A
-git -C output/hr_report -c user.email="noreply@github.com" -c user.name="somAzzz" commit -m "init: HR report artifacts (index.html, README.md, .nojekyll)"
+git init output/report
+git -C output/report add -A
+git -C output/report -c user.email="noreply@github.com" -c user.name="somAzzz" commit -m "init: HR report artifacts (index.html, README.md, .nojekyll)"
 ```
 
 Expected:
-- `Initialized empty Git repository in /home/bo/projects/python/frequency_analyzer/output/hr_report/.git/`
+- `Initialized empty Git repository in /home/bo/projects/python/frequency_analyzer/output/report/.git/`
 - `1 file changed, ...` (或 3 files)
 - 退出码 = 0
 
@@ -370,7 +370,7 @@ Run:
 cd /home/bo/projects/python/frequency_analyzer
 gh repo create tcfd-report --public \
   --description "TCFD Project Demo — interactive single-file HTML report" \
-  --source /home/bo/projects/python/frequency_analyzer/output/hr_report \
+  --source /home/bo/projects/python/frequency_analyzer/output/report \
   --push
 ```
 
@@ -539,12 +539,12 @@ Expected: `* [new branch] main -> main` 或 `Everything up-to-date`
 - [ ] **Step 1: 跑全部 verification 命令**
 
 ```bash
-echo "=== 1. build_hr_report.py 退出码 ==="
-test -f output/hr_report/index.html && echo "✅ index.html 存在" || echo "❌ index.html 缺失"
+echo "=== 1. build_report.py 退出码 ==="
+test -f output/report/index.html && echo "✅ index.html 存在" || echo "❌ index.html 缺失"
 
 echo "=== 2. Post-build README 修复 ==="
-grep -q "tcfd-report" output/hr_report/README.md && echo "✅ tcfd-report 已写入" || echo "❌"
-! grep -q "tcfd-hr-report" output/hr_report/README.md && echo "✅ 无 tcfd-hr-report 残留" || echo "❌"
+grep -q "tcfd-report" output/report/README.md && echo "✅ tcfd-report 已写入" || echo "❌"
+! grep -q "tcfd-hr-report" output/report/README.md && echo "✅ 无 tcfd-hr-report 残留" || echo "❌"
 
 echo "=== 3. 仓库创建 ==="
 gh repo view somAzzz/tcfd-report --json visibility -q '.visibility' | grep -q PUBLIC && echo "✅ 仓库 PUBLIC" || echo "❌"
@@ -575,7 +575,7 @@ code=$(curl -I -s -o /dev/null -w "%{http_code}" https://somAzzz.github.io/tcfd-
 
 本计划明确**不做**以下事项, 留给后续任务:
 
-1. ❌ 修改 `scripts/build_hr_report.py` (把 repo 名作为 CLI 参数)
+1. ❌ 修改 `scripts/build_report.py` (把 repo 名作为 CLI 参数)
 2. ❌ 修改 `src/tcfd_extractor/visualization/` 包任何文件
 3. ❌ 接入 GH Actions 做自动部署
 4. ❌ 用本地 Qwen 模型生成 AI 摘要

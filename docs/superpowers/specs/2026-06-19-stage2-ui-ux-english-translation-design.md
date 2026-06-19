@@ -73,7 +73,7 @@ Stage 1 完成了从 Plotly 到 ECharts 的迁移和 4 个高级交互图的部�
     └─ <script> ECharts init + chart.on('click') 联动 Alpine
                           │
                           ▼
-  output/hr_report/index.html (单文件, ~1.5-2MB)
+  output/report/index.html (单文件, ~1.5-2MB)
 ```
 
 **核心约束**:
@@ -93,7 +93,7 @@ Stage 1 完成了从 Plotly 到 ECharts 的迁移和 4 个高级交互图的部�
 | `tests/test_visualization/test_translations.py` | **扩展** | 新增 `test_translate_smart_*` 5 case |
 | `tests/test_visualization/test_echarts.py` | **扩展** | 4 个 builder 标题/副标题为英文的断言 |
 | `tests/test_visualization/test_data_loader.py` | **不改** | Stage 1 测试不动 (中文原值不变) |
-| `scripts/build_hr_report.py` | **不改** | 沿用 |
+| `scripts/build_report.py` | **不改** | 沿用 |
 
 **新建 0 + 扩展 2 + 修改 3 + 不改 3** = 5 个文件改动 + 0 个文件新建 (本次主要是模板层).
 
@@ -420,7 +420,7 @@ TCFD_THEME_CONFIG = {
 
 **Alpine 集成模式 (committed)**: 用 **Alpine.store** (而非 inline `x-data`), 在 `Alpine.start()` 之前注册全局 store. 优点: 跨组件共享状态, ECharts `chart.on('click')` 回调通过 `window.Alpine.store('hrApp')` 访问, 避免脆弱的 DOM 查询 (`document.querySelector('[x-data]').__x.$data`).
 
-**Alpine CDN URL (locked)**: `https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js` (defer load, ~15KB gzipped, MIT license, 锁版本). Validation: `grep -c "alpinejs@3.13" output/hr_report/index.html` 命中 1.
+**Alpine CDN URL (locked)**: `https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js` (defer load, ~15KB gzipped, MIT license, 锁版本). Validation: `grep -c "alpinejs@3.13" output/report/index.html` 命中 1.
 
 **Inter 字体 CDN URL (locked)**: `https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap` — `display=swap` 避免 FOIT, 字体加载失败时回退到 system-ui, 加载完后平滑替换.
 
@@ -722,16 +722,16 @@ return HTML_TEMPLATE.render(
 
 - [ ] `grep -r "[\u4e00-\u9fff]" src/tcfd_extractor/visualization/echarts.py` 命中 ≤ 5 处 (仅 docstring 注释允许)
 - [ ] `grep -r "[\u4e00-\u9fff]" src/tcfd_extractor/visualization/template.py` 命中 = 0 (template 100% 英文)
-- [ ] `grep -c "data-theme=" output/hr_report/index.html` 命中 1
-- [ ] `grep -c "Inter:wght" output/hr_report/index.html` 命中 1 (字体 link)
-- [ ] `grep -c "alpinejs" output/hr_report/index.html` 命中 1 (Alpine CDN)
-- [ ] `grep -c "__hrTranslate" output/hr_report/index.html` 命中 ≥ 5 (translator 注入)
-- [ ] `grep -c "__hrContextIndex" output/hr_report/index.html` 命中 = 1 (context 索引注入)
+- [ ] `grep -c "data-theme=" output/report/index.html` 命中 1
+- [ ] `grep -c "Inter:wght" output/report/index.html` 命中 1 (字体 link)
+- [ ] `grep -c "alpinejs" output/report/index.html` 命中 1 (Alpine CDN)
+- [ ] `grep -c "__hrTranslate" output/report/index.html` 命中 ≥ 5 (translator 注入)
+- [ ] `grep -c "__hrContextIndex" output/report/index.html` 命中 = 1 (context 索引注入)
 - [ ] `uv run pytest tests/test_visualization/` 全绿, 新增 ≥ 16 test
-- [ ] `python scripts/build_hr_report.py --output output/hr_report/` 退出码 0
-- [ ] `wc -c output/hr_report/index.html` 介于 2.5MB-3.5MB (Stage 1 是 1.5-2MB, 增量为 context 索引 ~1MB)
-- [ ] `python scripts/check_leakage.py output/hr_report/index.html` 退出码 0
-- [ ] 浏览器打开 `output/hr_report/index.html`, 7 项客观检查:
+- [ ] `python scripts/build_report.py --output output/report/` 退出码 0
+- [ ] `wc -c output/report/index.html` 介于 2.5MB-3.5MB (Stage 1 是 1.5-2MB, 增量为 context 索引 ~1MB)
+- [ ] `python scripts/check_leakage.py output/report/index.html` 退出码 0
+- [ ] 浏览器打开 `output/report/index.html`, 7 项客观检查:
   - (a) **暗色默认**: 首次访问页面背景近黑, 文字浅色
   - (b) **主题切换**: 点 header 角标 → 主题切换 + localStorage 写入 + 4 个 ECharts 图表自动重建适配新主题
   - (c) **Inter 字体**: 标题/KPI 数字视觉明显不同于 system-ui (更现代、字怀更紧)

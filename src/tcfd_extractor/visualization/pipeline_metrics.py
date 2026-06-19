@@ -67,7 +67,7 @@ class _TestCoveragePlaceholder:
     note: str = (
         "Before: 16 tests in tests/test_cooccurrence_evaluator.py at ab40b09. "
         "After: auto from `uv run pytest --collect-only -q | tail -1` "
-        "(currently 329+). Filled by build_hr_report.py."
+        "(currently 329+). Filled by build_report.py."
     )
 
 

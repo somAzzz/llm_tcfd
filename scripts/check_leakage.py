@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Pre-push leakage checker for the HR report.
+"""Pre-push leakage checker for the report.
 
-Scans `output/hr_report/index.html` for known sensitive terms.
+Scans `output/report/index.html` for known sensitive terms.
 
 Before pattern-matching, the script strips:
 - `<script type="application/json">` blocks (Plotly chart data — false positives)
@@ -17,7 +17,7 @@ Exit codes:
   2  = error (file not found, missing CLI arg)
 
 Usage:
-    python scripts/check_leakage.py output/hr_report/index.html
+    python scripts/check_leakage.py output/report/index.html
 """
 from __future__ import annotations
 

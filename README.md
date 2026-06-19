@@ -205,7 +205,7 @@ Aggregates 25 years of evaluation results into a **self-contained interactive HT
 ### 6. Tools & Scripts (`scripts/`)
 
 - `tcfd_word_bag_validator.py` — Word-bag validation CLI
-- `build_hr_report.py` — HR report generator (data → HTML + leakage check)
+- `build_report.py` — Report generator (data → HTML + leakage check)
 - `check_leakage.py` — Pre-push leakage checker (company names + email + phone + TODO patterns)
 
 ## Visualization Report
@@ -218,16 +218,16 @@ The `visualization` package ships a complete "research project → portfolio HTM
 
 ```bash
 # Default: GitHub Pages mode (CDN-loaded JS, ~1.5 MB)
-python scripts/build_hr_report.py --output output/hr_report/
+python scripts/build_report.py --output output/report/
 
 # Email attachment mode (inline JS, no network needed, ~4 MB)
-python scripts/build_hr_report.py --output output/hr_report/email/ --inline
+python scripts/build_report.py --output output/report/email/ --inline
 ```
 
 ### Output structure
 
 ```
-output/hr_report/
+output/report/
 ├── index.html      # Self-contained interactive report (open to view)
 ├── README.md       # Deployment instructions
 └── .nojekyll       # GitHub Pages marker
@@ -244,7 +244,7 @@ output/hr_report/
 ### Design principles
 
 - **Two-audience design**: non-technical HR (30-second scan of KPIs) + technical HR (expand Tech Deep Dive for architecture)
-- **Data privacy**: company names are SHA-256 hashed one-way (no reverse map); `output/hr_report/` is not committed
+- **Data privacy**: company names are SHA-256 hashed one-way (no reverse map); `output/report/` is not committed
 - **Deployment-friendly**: single-file HTML, can be deployed directly to GitHub Pages (see spec §14)
 - **Leakage-safe**: must pass `scripts/check_leakage.py` before any public-repo push
 
@@ -342,7 +342,7 @@ Test organization:
 | Metric | Value |
 |---|---|
 | New modules | 8 (`anonymize` / `translations` / `data_loader` / `chart_builders` / `static_charts` / `module_graph` / `html_assembler` / `template`) |
-| New scripts | 2 (`build_hr_report.py` orchestrator, `check_leakage.py` pre-push leakage checker) |
+| New scripts | 2 (`build_report.py` orchestrator, `check_leakage.py` pre-push leakage checker) |
 | New tests | 65 (across 7 test files) |
 | Total tests | 228 passing (target ≥ 200) |
 | HTML report size | 121 KB (CDN mode) |
@@ -351,7 +351,7 @@ Test organization:
 
 **Key DoD checkpoints**:
 
-- ✅ `output/hr_report/index.html` is double-clickable (no server)
+- ✅ `output/report/index.html` is double-clickable (no server)
 - ✅ Above-the-fold contains "annual report" + "climate/tcfd/keyword"
 - ✅ All 5 sections render (Hero / What We Built / What We Discovered / Engineering / Tech Deep Dive)
 - ✅ Bilingual tooltip (Chinese keyword + English translation)
@@ -361,7 +361,7 @@ Test organization:
 - ✅ Module dependency graph AST-discovered (no hand-maintained mapping)
 - ✅ `git diff tests/test_cooccurrence_evaluator.py` is empty (backward compat preserved)
 
-**GitHub Pages deployment** (recommended): push `output/hr_report/` to a separate `tcfd-hr-report` public repo for a `https://<user>.github.io/tcfd-hr-report/` URL that can be embedded in a job application email.
+**GitHub Pages deployment** (recommended): push `output/report/` to a separate `tcfd-hr-report` public repo for a `https://<user>.github.io/tcfd-hr-report/` URL that can be embedded in a job application email.
 
 ## Contributing
 

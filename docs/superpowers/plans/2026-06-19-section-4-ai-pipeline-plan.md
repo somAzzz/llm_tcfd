@@ -23,7 +23,7 @@
 - `src/tcfd_extractor/visualization/template.py` — Replace Section 4 HTML/CSS/JS
 - `src/tcfd_extractor/visualization/html_assembler.py` — Drop `refactor_bar_b64` kwarg + `_build_refactor_dashboard_data`; render new dashboard key
 - `src/tcfd_extractor/visualization/static_charts.py` — Remove `build_refactor_bar`
-- `scripts/build_hr_report.py` — Remove old metric plumbing; pass metrics list to new builder
+- `scripts/build_report.py` — Remove old metric plumbing; pass metrics list to new builder
 
 ### Modify (tests only)
 - `tests/test_visualization/test_echarts.py` — Replace `TestRefactorDashboard` with `TestPipelineHealthDashboard`
@@ -170,7 +170,7 @@ class _TestCoveragePlaceholder:
     note: str = (
         "Before: 16 tests in tests/test_cooccurrence_evaluator.py at ab40b09. "
         "After: auto from `uv run pytest --collect-only -q | tail -1` "
-        "(currently 329+). Filled by build_hr_report.py."
+        "(currently 329+). Filled by build_report.py."
     )
 
 
@@ -627,7 +627,7 @@ Expected: 0 matches.
 
 - [ ] **Step 3.8: Verify the template module still parses**
 
-The full HTML render needs the new `html_assembler.py` wiring (Chunk 2, Task 4) and `build_hr_report.py` updates (Chunk 2, Task 5) before it can succeed end-to-end. For Chunk 1, only verify the template module imports cleanly:
+The full HTML render needs the new `html_assembler.py` wiring (Chunk 2, Task 4) and `build_report.py` updates (Chunk 2, Task 5) before it can succeed end-to-end. For Chunk 1, only verify the template module imports cleanly:
 
 Run: `PYTHONPATH=src uv run python -c "import tcfd_extractor.visualization.template; print('TEMPLATE imported OK')"`
 Expected: `TEMPLATE imported OK`.
@@ -792,7 +792,7 @@ with:
     )
 ```
 
-(Note: `refactor_bar_b64` and `refactor_dashboard_json` are removed; `pipeline_health_dashboard_json` is the new template variable matching `template.py` Step 3.4. `module_graph_svg` is kept as an unused kwarg for backward compatibility with `build_hr_report.py` even though the template no longer references it — see Task 5.)
+(Note: `refactor_bar_b64` and `refactor_dashboard_json` are removed; `pipeline_health_dashboard_json` is the new template variable matching `template.py` Step 3.4. `module_graph_svg` is kept as an unused kwarg for backward compatibility with `build_report.py` even though the template no longer references it — see Task 5.)
 
 - [ ] **Step 4.4: Update `tests/test_visualization/test_html_assembler.py`**
 
@@ -884,14 +884,14 @@ git commit -m "refactor(static_charts): Stage 5.5 — drop build_refactor_bar (r
 
 ---
 
-### Task 6: Update `scripts/build_hr_report.py` — remove old plumbing, pass new metrics kwarg
+### Task 6: Update `scripts/build_report.py` — remove old plumbing, pass new metrics kwarg
 
 **Files:**
-- Modify: `scripts/build_hr_report.py:27-65, 109-160`
+- Modify: `scripts/build_report.py:27-65, 109-160`
 
 - [ ] **Step 6.1: Locate the god-class metric helpers**
 
-Run: `grep -n "get_git_lines_before\|get_current_lines\|get_module_stats\|get_test_count_before\|build_refactor_bar\|refactor_b64\|build_refactor_dashboard\|refactor_stats" scripts/build_hr_report.py`
+Run: `grep -n "get_git_lines_before\|get_current_lines\|get_module_stats\|get_test_count_before\|build_refactor_bar\|refactor_b64\|build_refactor_dashboard\|refactor_stats" scripts/build_report.py`
 Expected output:
 ```
 27:def get_git_lines_before(path: Path) -> int:
@@ -910,7 +910,7 @@ Expected output:
 
 - [ ] **Step 6.2: Replace the metric-gathering and chart-building block**
 
-In `build_hr_report.py`, **delete the entire `get_git_lines_before` function** (lines 27-38 inclusive). **Keep** `get_test_count_before` (lines 68-82) because it still works for the new dashboard.
+In `build_report.py`, **delete the entire `get_git_lines_before` function** (lines 27-38 inclusive). **Keep** `get_test_count_before` (lines 68-82) because it still works for the new dashboard.
 
 **Delete the entire `get_current_lines` function** (lines 41-46 inclusive).
 
@@ -989,26 +989,26 @@ Replace the `assemble_html(...)` invocation (lines 148-160) with:
 
 - [ ] **Step 6.5: Run the build script (smoke test)**
 
-Run: `python scripts/build_hr_report.py --output /tmp/hr_report_test/ 2>&1 | tail -20`
-Expected: build succeeds, prints "✅ Build complete. Report at: /tmp/hr_report_test/index.html".
+Run: `python scripts/build_report.py --output /tmp/report_test/ 2>&1 | tail -20`
+Expected: build succeeds, prints "✅ Build complete. Report at: /tmp/report_test/index.html".
 
 If the script fails:
 - If `ModuleNotFoundError: No module named 'tcfd_extractor.visualization.pipeline_metrics'` → Task 1 didn't commit; re-run `git log --oneline -5` and verify.
-- If `KeyError: 'refactor_bar_b64'` in some old call site → re-grep for `refactor_bar_b64` across `scripts/` and `tests/`; only `build_hr_report.py` should have it (now removed in this Task).
+- If `KeyError: 'refactor_bar_b64'` in some old call site → re-grep for `refactor_bar_b64` across `scripts/` and `tests/`; only `build_report.py` should have it (now removed in this Task).
 - If `BUILD FAILED: leakage check returned non-zero` → the new copy leaked a real company name; inspect `index.html` and remove the offending string.
 
 - [ ] **Step 6.6: Verify the rendered HTML contains the new Section 4**
 
-Run: `grep -c "AI Pipeline Resilience & Engineering Health\|Stochastic-to-Deterministic Defense\|Memory-Safe Streaming\|Comprehensive Observability" /tmp/hr_report_test/index.html`
+Run: `grep -c "AI Pipeline Resilience & Engineering Health\|Stochastic-to-Deterministic Defense\|Memory-Safe Streaming\|Comprehensive Observability" /tmp/report_test/index.html`
 Expected: 4 (one match per string).
 
-Run: `grep -c "pipelineHealthDashboard\|echarts-pipeline-health-dashboard\|__hrToggleDeepDive" /tmp/hr_report_test/index.html`
+Run: `grep -c "pipelineHealthDashboard\|echarts-pipeline-health-dashboard\|__hrToggleDeepDive" /tmp/report_test/index.html`
 Expected: ≥ 3.
 
 - [ ] **Step 6.7: Commit**
 
 ```bash
-git add scripts/build_hr_report.py
+git add scripts/build_report.py
 git commit -m "feat(build): Stage 5.6 — pass pipeline_metrics to assemble_html; remove god-class metric helpers"
 ```
 
@@ -1038,25 +1038,25 @@ Expected: ≥ 329 passing tests (matches the Section 4 "329+" KPI). The `test_in
 
 - [ ] **Step 7.4: Final end-to-end build**
 
-Run: `rm -rf /tmp/hr_report_final && python scripts/build_hr_report.py --output /tmp/hr_report_final/ --target github-pages 2>&1 | tail -5`
-Expected: `✅ Build complete. Report at: /tmp/hr_report_final/index.html`.
+Run: `rm -rf /tmp/report_final && python scripts/build_report.py --output /tmp/report_final/ --target github-pages 2>&1 | tail -5`
+Expected: `✅ Build complete. Report at: /tmp/report_final/index.html`.
 
 (The `--target github-pages` flag is explicit to match the production deploy: the report loads ECharts + Alpine + Mermaid via CDN, identical to what GitHub Pages will serve. Using `--target email-attachment` would change the visual behavior since that target inlines the JS.)
 
 - [ ] **Step 7.5: Spot-check the new Section 4 visually**
 
-Open `/tmp/hr_report_final/index.html` in a browser:
+Open `/tmp/report_final/index.html` in a browser:
 - Scroll to "4. Robust AI Pipeline Engineering"
 - Confirm: chart title "AI Pipeline Resilience & Engineering Health", 4 metric groups on X-axis, 2 bars per group (red Before, green After)
 - Click any bar → module graph appears below
 - Click any bar again → module graph collapses
 - Resize the browser window below 900px → layout collapses to 1 column
 
-If any of these fail, debug per the spec's §10 DoD manual-test instructions. Record results in `output/hr_report/BUILD_LOG.md` under "Section 4 manual test".
+If any of these fail, debug per the spec's §10 DoD manual-test instructions. Record results in `output/report/BUILD_LOG.md` under "Section 4 manual test".
 
-- [ ] **Step 7.6: Stage the regenerated `output/hr_report/` artifacts**
+- [ ] **Step 7.6: Stage the regenerated `output/report/` artifacts**
 
-Run: `git add output/hr_report/index.html output/hr_report/README.md output/hr_report/.nojekyll output/hr_report/BUILD_LOG.md`
+Run: `git add output/report/index.html output/report/README.md output/report/.nojekyll output/report/BUILD_LOG.md`
 Expected: files are tracked. (If `.gitignore` excludes them, force-add with `git add -f`.)
 
 - [ ] **Step 7.7: Final commit**
@@ -1073,6 +1073,6 @@ git commit -m "feat(hr-report): Stage 5.7 — regenerated output with AI Pipelin
 - **Net new tests**: +13 (5 metrics + 8 dashboard).
 - **Net removed tests**: −6 (4 old dashboard + 2 old bar).
 - **Files created**: 2 (`pipeline_metrics.py`, `test_pipeline_metrics.py`).
-- **Files modified**: 8 (`echarts.py`, `template.py`, `html_assembler.py`, `static_charts.py`, `build_hr_report.py`, `test_echarts.py`, `test_html_assembler.py`, `test_static_charts.py`).
+- **Files modified**: 8 (`echarts.py`, `template.py`, `html_assembler.py`, `static_charts.py`, `build_report.py`, `test_echarts.py`, `test_html_assembler.py`, `test_static_charts.py`).
 - **Commits**: 7 (one per task), plus 1 final regeneration commit = **8 commits total**.
 - **Estimated effort**: ~3-4 hours for a focused engineer following TDD.

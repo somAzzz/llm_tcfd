@@ -27,7 +27,7 @@ Replace the current Section 4 of the HR report (which describes a 468-line god-c
 - **SC-6**: Y-axis numeric ticks are hidden; per-bar `label` shows formatted value with unit (e.g., `"4.2 GB"`, `"8x"`, `"62%"`).
 - **SC-7**: All 4 metric values render and are sourced per §4.
 - **SC-8**: No real company name leaks into Section 4 copy.
-- **SC-9**: `uv run pytest tests/test_visualization/ -v` passes; `python scripts/build_hr_report.py --output output/hr_report/` succeeds and the leakage check exits 0.
+- **SC-9**: `uv run pytest tests/test_visualization/ -v` passes; `python scripts/build_report.py --output output/report/` succeeds and the leakage check exits 0.
 
 ---
 
@@ -233,7 +233,7 @@ class _TestCoveragePlaceholder:
     note: str = (
         "Before: 16 tests in tests/test_cooccurrence_evaluator.py at ab40b09. "
         "After: auto from `uv run pytest --collect-only -q | tail -1` "
-        "(currently 329+). Filled by build_hr_report.py."
+        "(currently 329+). Filled by build_report.py."
     )
 
 
@@ -249,7 +249,7 @@ ALL_STATIC_METRICS: tuple[PipelineMetric, ...] = (
 
 ### 4.2 Test count wiring
 
-`build_hr_report.py` continues to call `uv run pytest --collect-only -q` (existing logic, unchanged). It uses the result to construct the 4th metric:
+`build_report.py` continues to call `uv run pytest --collect-only -q` (existing logic, unchanged). It uses the result to construct the 4th metric:
 
 ```python
 from dataclasses import replace
@@ -448,7 +448,7 @@ document.addEventListener('alpine:init', () => {
 
 ## 6. Build Script + html_assembler Wiring
 
-### 6.1 `scripts/build_hr_report.py` changes
+### 6.1 `scripts/build_report.py` changes
 
 - **Remove**: `get_git_lines_before`, `get_git_lines_after`, `get_module_stats` (the 3 module-metric collectors), and the call to `build_refactor_bar`. They served the old Section 4.
 - **Keep**: `get_test_count_before` (parses the ab40b09 baseline test file) and the `uv run pytest --collect-only` call (now used to fill `test_coverage.after`).
@@ -557,7 +557,7 @@ def assemble_html(
 - No new test infrastructure — extends existing `tests/test_visualization/`.
 - No i18n changes — Section 4 is English-only.
 - No mobile-specific design beyond the 1-column fallback in the CSS grid.
-- No changes to the `output/hr_report/README.md` deployment instructions.
+- No changes to the `output/report/README.md` deployment instructions.
 - No GitHub Pages URL change.
 - No re-measurement of the 3 hardcoded metrics (out of scope; follow-up spec).
 
@@ -578,15 +578,15 @@ A task is "DONE" only when ALL of the following are true:
 - [ ] `window.__hrToggleDeepDive` is defined and uses `Alpine.nextTick` + `echarts.getInstanceByDom(el).resize()` (per §5.4)
 - [ ] **M4 (dead-code removal)**: `x-data="{ showGraph: false }"` wrapper div is removed from Section 4; `bindDashboardClickHandler()` function and its `DOMContentLoaded` call are removed; `window.__hrAppState = { showGraph: false }` declaration is removed
 - [ ] **M4 (new click handler)**: `bindPipelineHealthClickHandler()` is defined and called from `rebuildAllCharts()`; it attaches `chart.on('click', () => window.__hrToggleDeepDive())` to the new dashboard
-- [ ] `scripts/build_hr_report.py` calls the new builder, removes `build_refactor_bar` plumbing, passes `pipeline_health_dashboard_json`
+- [ ] `scripts/build_report.py` calls the new builder, removes `build_refactor_bar` plumbing, passes `pipeline_health_dashboard_json`
 - [ ] `src/tcfd_extractor/visualization/html_assembler.py` accepts and renders the new dashboard JSON; `refactor_bar_b64` keyword and `_build_refactor_dashboard_data` helper are removed
 - [ ] `rg "refactor_dashboard|refactor-bar|build_refactor_bar|TestRefactorDashboard|__hrAppState|bindDashboardClickHandler" src/ tests/ scripts/` returns 0 matches
 - [ ] `rg "_build_refactor_dashboard_data" src/` returns 0 matches
 - [ ] `uv run pytest tests/test_visualization/ -v` passes
-- [ ] `python scripts/build_hr_report.py --output output/hr_report/` succeeds and `scripts/check_leakage.py` exits 0
-- [ ] **SC-4 manual test** (cannot be automated in pytest without a Selenium harness): open `output/hr_report/index.html` in **3 browsers** (Chrome, Firefox, Safari). For each browser: (1) confirm 8 bars render with the correct colors (`#8b3a3a` for Before, `#56d364` for After) and per-bar labels; (2) click one bar from each of the 4 metric groups (total 4 clicks) and confirm the module graph (`#echarts-module-graph`) appears; (3) click the same bar again to confirm the graph collapses; (4) open DevTools, evaluate `echarts.getInstanceByDom(document.getElementById('echarts-module-graph'))` after the graph is revealed, and confirm a non-null ECharts instance is returned (proves the `resize()` call worked). Record results in `output/hr_report/BUILD_LOG.md` under "Section 4 manual test".
-- [ ] No real company name appears anywhere in the new Section 4 copy or in `output/hr_report/index.html` (verified by `scripts/check_leakage.py` exit 0)
-- [ ] `output/hr_report/index.html` is regenerated and the new Section 4 visually matches §3.2
+- [ ] `python scripts/build_report.py --output output/report/` succeeds and `scripts/check_leakage.py` exits 0
+- [ ] **SC-4 manual test** (cannot be automated in pytest without a Selenium harness): open `output/report/index.html` in **3 browsers** (Chrome, Firefox, Safari). For each browser: (1) confirm 8 bars render with the correct colors (`#8b3a3a` for Before, `#56d364` for After) and per-bar labels; (2) click one bar from each of the 4 metric groups (total 4 clicks) and confirm the module graph (`#echarts-module-graph`) appears; (3) click the same bar again to confirm the graph collapses; (4) open DevTools, evaluate `echarts.getInstanceByDom(document.getElementById('echarts-module-graph'))` after the graph is revealed, and confirm a non-null ECharts instance is returned (proves the `resize()` call worked). Record results in `output/report/BUILD_LOG.md` under "Section 4 manual test".
+- [ ] No real company name appears anywhere in the new Section 4 copy or in `output/report/index.html` (verified by `scripts/check_leakage.py` exit 0)
+- [ ] `output/report/index.html` is regenerated and the new Section 4 visually matches §3.2
 
 ---
 

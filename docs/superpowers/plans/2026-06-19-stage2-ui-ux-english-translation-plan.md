@@ -8,11 +8,11 @@
 
 **Tech Stack:** Python ≥ 3.12, ECharts 5.5.0 (CDN), Alpine.js 3.13.5 (CDN, defer), Inter 字体 (Google Fonts, weights 400/500/600/700, display=swap), Jinja2, pytest, uv。
 
-**Worktree:** 不使用, 在 main 分支直接执行。 与 Stage 1 部署决策一致; 任务独立可逆 (build 脚本不入 git, 数据源不变,output/hr_report 独立 deploy repo)。
+**Worktree:** 不使用, 在 main 分支直接执行。 与 Stage 1 部署决策一致; 任务独立可逆 (build 脚本不入 git, 数据源不变,output/report 独立 deploy repo)。
 
 **Spec reference:** `doc/superpowers/specs/2026-06-19-stage2-ui-ux-english-translation-design.md` (commit `4cc6942`, 已通过 2 轮 review, 7+3 修复)
 
-**Branching model:** 主仓 main 累积追加 commits(Stage 1 已 8 commits)。 本次新增 commits 追加在 main 之后。 output/hr_report 单独 git repo,独立 push。
+**Branching model:** 主仓 main 累积追加 commits(Stage 1 已 8 commits)。 本次新增 commits 追加在 main 之后。 output/report 单独 git repo,独立 push。
 
 ---
 
@@ -28,8 +28,8 @@
 | `tests/test_visualization/test_translations.py` | **扩展** | 5 case: `translate_smart()` 行为 + 词典扩展条目存在性 |
 | `tests/test_visualization/test_echarts.py` | **扩展** | 4 builder 标题/副标题英文化 + `_t()` helper 行为 |
 | `tests/test_visualization/test_html_assembler.py` | **扩展** | 4 case: `build_context_index()` 行为 + 注入物 + 主题属性 |
-| `scripts/build_hr_report.py` | **不改** | 沿用 |
-| `output/hr_report/` | **重建** | rebuild + force-push to upstream `somAzzz/tcfd-report` main |
+| `scripts/build_report.py` | **不改** | 沿用 |
+| `output/report/` | **重建** | rebuild + force-push to upstream `somAzzz/tcfd-report` main |
 
 **净变化**: 扩展 2 + 修改 2 + 重写 1 + 不动 2 + 重建 1 ≈ **+280 行, 净增 ~280 行** (其中 ~40% 测试, ~30% 是 template 主题 CSS)
 
@@ -1590,38 +1590,38 @@ git commit -m "feat(html_assembler): Stage 2 — build_context_index() + 注入 
 
 **Files:**
 - 无源码改动
-- 重建: `output/hr_report/index.html`
-- Force-push: `output/hr_report` 独立 deploy repo
+- 重建: `output/report/index.html`
+- Force-push: `output/report` 独立 deploy repo
 
 **目标**: 把 Stage 2 全部代码改动串起来, 跑 build 脚本, 验证 HTML 体积/泄漏检查/视觉 7 项/部署 200。
 
-**重要前置**: Chunk 5 所有命令假定 `cwd` 是主仓根目录 `/home/bo/projects/python/frequency_analyzer` (build 脚本硬编码 `results_root=Path("output/evaluate_cooccurrence")` 相对 cwd)。 步骤 1, 2, 3, 4, 5, 11 都在主仓根执行; 步骤 6-8 `cd output/hr_report` 后独立 repo 操作; 步骤 12 回到主仓根。 用绝对路径或显式 `cd` 避免误从 deploy repo 目录跑 build。
+**重要前置**: Chunk 5 所有命令假定 `cwd` 是主仓根目录 `/home/bo/projects/python/frequency_analyzer` (build 脚本硬编码 `results_root=Path("output/evaluate_cooccurrence")` 相对 cwd)。 步骤 1, 2, 3, 4, 5, 11 都在主仓根执行; 步骤 6-8 `cd output/report` 后独立 repo 操作; 步骤 12 回到主仓根。 用绝对路径或显式 `cd` 避免误从 deploy repo 目录跑 build。
 
 ### Task 5.1: 跑 build 脚本
 
-- [ ] **Step 1: 清掉旧的 output/hr_report**
+- [ ] **Step 1: 清掉旧的 output/report**
 
 ```bash
 cd /home/bo/projects/python/frequency_analyzer
-rm -f output/hr_report/index.html output/hr_report/README.md
+rm -f output/report/index.html output/report/README.md
 # 保留 .git 和 .nojekyll
 ```
 
-注意: 保留 `output/hr_report/.git` (它是独立 deploy repo), 但清掉 index.html / README.md。 `scripts/build_hr_report.py` 会 overwrite index.html 和 README.md, 直接跑即可, 但为干净起见先 rm。
+注意: 保留 `output/report/.git` (它是独立 deploy repo), 但清掉 index.html / README.md。 `scripts/build_report.py` 会 overwrite index.html 和 README.md, 直接跑即可, 但为干净起见先 rm。
 
-- [ ] **Step 2: 跑 build_hr_report.py**
+- [ ] **Step 2: 跑 build_report.py**
 
-Run: `uv run python scripts/build_hr_report.py --output output/hr_report/`
-Expected: 退出码 0, 打印 `Wrote output/hr_report/index.html (NNN,NNN chars)`, 泄漏检查通过, `Build complete`。
+Run: `uv run python scripts/build_report.py --output output/report/`
+Expected: 退出码 0, 打印 `Wrote output/report/index.html (NNN,NNN chars)`, 泄漏检查通过, `Build complete`。
 
 如果失败, 排查:
 - 数据缺失 (e.g., `output/evaluate_cooccurrence/{2022,2023,2024}/results.jsonl`) — 用上一轮部署的 git tag 拉回
 - 模板渲染错误 — 检查 `template.py` Jinja 语法
-- 泄漏检查失败 — 跑 `python scripts/check_leakage.py output/hr_report/index.html` 详细输出
+- 泄漏检查失败 — 跑 `python scripts/check_leakage.py output/report/index.html` 详细输出
 
 - [ ] **Step 3: 验证 HTML 体积 (spec §13 验证清单 wc -c 介于 2.5MB-3.5MB)**
 
-Run: `wc -c output/hr_report/index.html`
+Run: `wc -c output/report/index.html`
 Expected: 介于 2,500,000 - 3,500,000 bytes (2.5-3.5MB)。 Stage 1 是 1.5-2MB, 增量为 context 索引 ~1MB。 如果 < 2.5MB, 检查 context_index 是否实际有内容 (debug: 临时 dump 到文件看大小)。 如果 > 3.5MB, spec §8 已规划 3-2-1 降级路径, 需在 `assemble_html` 注入前加 size check (本 spec 已要求 `logger.warning` 强制输出)。
 
 注意: spec §8 要求**实施时先 dry-run 测一次大小**, 超过 3MB 降到 2 sample。 实施时如 `len(context_index_json) > 3*1024*1024` 触发降级。 这是 defensive coding, 留待真实数据测出来再决定是否触发 — 实施时按 3 sample 跑一次, 测得体积再调整。
@@ -1633,20 +1633,20 @@ Expected: 全绿。 含 Stage 1 全部原 case + Stage 2 新增 case (Chunk 1: 5
 
 - [ ] **Step 5: 跑泄漏检查独立验证**
 
-Run: `python scripts/check_leakage.py output/hr_report/index.html`
+Run: `python scripts/check_leakage.py output/report/index.html`
 Expected: 退出码 0。
 
 ### Task 5.2: 部署到 GitHub Pages
 
-- [ ] **Step 6: 进入 output/hr_report (独立 deploy repo)**
+- [ ] **Step 6: 进入 output/report (独立 deploy repo)**
 
-Run: `cd output/hr_report && git status`
+Run: `cd output/report && git status`
 Expected: `Changes not staged for commit: modified: index.html` (+ README.md 也许 modified)。
 
 - [ ] **Step 7: Stage + commit**
 
 ```bash
-cd output/hr_report
+cd output/report
 git add -A
 git -c user.email="noreply@github.com" -c user.name="somAzzz" commit -m "feat: Stage 2 — UI/UX dark + Inter + Alpine side panel (中→英)"
 ```
@@ -1654,7 +1654,7 @@ git -c user.email="noreply@github.com" -c user.name="somAzzz" commit -m "feat: S
 - [ ] **Step 8: Push (force, 单一来源)**
 
 ```bash
-cd output/hr_report
+cd output/report
 git push upstream main --force
 ```
 
@@ -1695,23 +1695,23 @@ grep -P '[\x{4e00}-\x{9fff}]' src/tcfd_extractor/visualization/template.py | wc 
 # Expected: 0
 
 # 3. data-theme="dark" 命中 1
-grep -c 'data-theme="dark"' output/hr_report/index.html
+grep -c 'data-theme="dark"' output/report/index.html
 # Expected: 1
 
 # 4. Inter:wght 命中 1
-grep -c "Inter:wght" output/hr_report/index.html
+grep -c "Inter:wght" output/report/index.html
 # Expected: 1
 
 # 5. alpinejs 命中 1
-grep -c "alpinejs" output/hr_report/index.html
+grep -c "alpinejs" output/report/index.html
 # Expected: 1
 
 # 6. __hrTranslate 命中 ≥ 5
-grep -c "__hrTranslate" output/hr_report/index.html
+grep -c "__hrTranslate" output/report/index.html
 # Expected: >= 5
 
 # 7. __hrContextIndex 命中 = 1
-grep -c "__hrContextIndex" output/hr_report/index.html
+grep -c "__hrContextIndex" output/report/index.html
 # Expected: 1
 
 # 8. pytest 全绿 + Stage 2 新增 ≥ 16 test
@@ -1719,16 +1719,16 @@ uv run pytest tests/test_visualization/ -v
 # Expected: 全部 PASS, 新增 test 数 = 5+13+4+5 = 27 case (远超过 ≥ 16 下限)
 
 # 9. build 脚本退出码 0
-uv run python scripts/build_hr_report.py --output output/hr_report/
+uv run python scripts/build_report.py --output output/report/
 echo "exit_code: $?"
 # Expected: exit_code: 0
 
 # 10. HTML 体积
-wc -c output/hr_report/index.html
+wc -c output/report/index.html
 # Expected: 2500000-3500000 bytes (2.5-3.5MB)
 
 # 11. 泄漏检查
-python scripts/check_leakage.py output/hr_report/index.html
+python scripts/check_leakage.py output/report/index.html
 echo "exit_code: $?"
 # Expected: exit_code: 0
 ```
@@ -1740,10 +1740,10 @@ echo "exit_code: $?"
 ```bash
 cd /home/bo/projects/python/frequency_analyzer
 git status
-# Should be clean (output/hr_report 已在独立 repo commit 过, 主仓 .gitignore 排除)
+# Should be clean (output/report 已在独立 repo commit 过, 主仓 .gitignore 排除)
 ```
 
-确认主仓无 pending 改动。 实施计划全部 commit 在主仓 Chunk 1-4 (4 个 commits), output/hr_report 1 个 commit。
+确认主仓无 pending 改动。 实施计划全部 commit 在主仓 Chunk 1-4 (4 个 commits), output/report 1 个 commit。
 
 - [ ] **Step 13: 报告完成**
 

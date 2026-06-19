@@ -30,7 +30,7 @@
 | `tests/test_visualization/test_chart_builders.py` | **删除** | Plotly 测试废弃 |
 | `tests/test_visualization/test_html_assembler.py` | **修改** | 集成测试: 4 图 inline `<script>` 存在 |
 | `pyproject.toml` | **修改** | 移除 `plotly>=5.0.0` 依赖 |
-| `scripts/build_hr_report.py` | **微调** | 注释更新 (输出大小预期) |
+| `scripts/build_report.py` | **微调** | 注释更新 (输出大小预期) |
 | `README.md` | **微调** | HR 报告章节添加 "ECharts 4 个高级图" 说明 |
 
 **净变化**: 新增 2 + 扩展 4 + 修改 4 + 删除 2 ≈ **+800 行, -150 行** (净 +650 行, ~50% 测试)
@@ -1124,7 +1124,7 @@ Expected: PASS (template 和 assembler 一致)
 ```python
 def test_assembled_html_has_4_echarts_charts(tmp_path):
     """集成测试: 生成的 HTML 含 4 个 ECharts 初始化块。"""
-    # 假设 build_hr_report 用法: assemble_html(results_root=..., refactor_bar_b64=..., module_graph_svg=..., refactor_stats=...)
+    # 假设 build_report 用法: assemble_html(results_root=..., refactor_bar_b64=..., module_graph_svg=..., refactor_stats=...)
     from tcfd_extractor.visualization.html_assembler import assemble_html
     html = assemble_html(
         results_root=Path("output/evaluate_cooccurrence"),
@@ -1161,7 +1161,7 @@ git commit -m "feat(visualization): html_assembler + template 改用 ECharts (4 
 - Delete: `tests/test_visualization/test_chart_builders.py`
 - Modify: `pyproject.toml`
 - Modify: `README.md`
-- Modify: `scripts/build_hr_report.py` (注释)
+- Modify: `scripts/build_report.py` (注释)
 
 ### Task 4.1: 确认无任何 import 引用 chart_builders / plotly
 
@@ -1244,7 +1244,7 @@ Expected: grep 返回空
 
 - [ ] **Step 3: 在 HR 报告章节加 ECharts 说明 (扩展原 Task 4.4)**
 
-在 `## 可视化报告` 章节, 在原 `build_hr_report.py` 代码块**之前**, 添加:
+在 `## 可视化报告` 章节, 在原 `build_report.py` 代码块**之前**, 添加:
 
 ```markdown
 ### 高级图表 (ECharts, Stage 1)
@@ -1269,11 +1269,11 @@ git add README.md
 git commit -m "docs(README): HR 章节加 ECharts 4 高级图说明 + 修复 tcfd-hr-report 引用漂移 (line 253/256/364)"
 ```
 
-### Task 4.5: 更新 scripts/build_hr_report.py 注释
+### Task 4.5: 更新 scripts/build_report.py 注释
 
 - [ ] **Step 1: 找到 size 期望的注释**
 
-Run: `grep -n "size\|3-4MB\|1.5-2MB" scripts/build_hr_report.py`
+Run: `grep -n "size\|3-4MB\|1.5-2MB" scripts/build_report.py`
 
 - [ ] **Step 2: 更新注释 (3-4MB → 1.5-2MB)**
 
@@ -1282,8 +1282,8 @@ Run: `grep -n "size\|3-4MB\|1.5-2MB" scripts/build_hr_report.py`
 - [ ] **Step 3: Commit**
 
 ```bash
-git add scripts/build_hr_report.py
-git commit -m "docs(build_hr_report): 更新输出 size 预期 (3-4MB → 1.5-2MB)"
+git add scripts/build_report.py
+git commit -m "docs(build_report): 更新输出 size 预期 (3-4MB → 1.5-2MB)"
 ```
 
 ### Task 4.6: Chunk 4 集成验证
@@ -1304,42 +1304,42 @@ Expected: 全绿 (其它模块未受影响)
 
 **Files:** 无新文件, 仅部署脚本 + 验证
 
-### Task 5.1: 跑 build_hr_report.py
+### Task 5.1: 跑 build_report.py
 
 - [ ] **Step 1: 跑构建**
 
-Run: `cd /home/bo/projects/python/frequency_analyzer && uv run python scripts/build_hr_report.py --output output/hr_report/ 2>&1 | tee /tmp/build_hr_v2.log`
+Run: `cd /home/bo/projects/python/frequency_analyzer && uv run python scripts/build_report.py --output output/report/ 2>&1 | tee /tmp/build_hr_v2.log`
 Expected 关键输出:
 - `Building refactor bar chart...`
 - `Building module graph SVG...`
 - `Assembling HTML...`
-- `Wrote output/hr_report/index.html (XXX,XXX chars)` (1.5-2MB 范围)
+- `Wrote output/report/index.html (XXX,XXX chars)` (1.5-2MB 范围)
 - `✅ Build complete`
 - 退出码 = 0
 
 - [ ] **Step 2: 跑 check_leakage.py 二次验证**
 
-Run: `uv run python scripts/check_leakage.py output/hr_report/index.html 2>&1`
-Expected: `✅ Leakage check passed for output/hr_report/index.html`, 退出码 0
+Run: `uv run python scripts/check_leakage.py output/report/index.html 2>&1`
+Expected: `✅ Leakage check passed for output/report/index.html`, 退出码 0
 
 - [ ] **Step 3: grep 4 图 init 块存在**
 
-Run: `grep -c "echarts.init" output/hr_report/index.html`
+Run: `grep -c "echarts.init" output/report/index.html`
 Expected: ≥ 4
 
 - [ ] **Step 4: grep ECharts CDN 引用**
 
-Run: `grep -o "echarts@5\.[0-9.]*[^/]*" output/hr_report/index.html | head -1`
+Run: `grep -o "echarts@5\.[0-9.]*[^/]*" output/report/index.html | head -1`
 Expected: `echarts@5.5.0`
 
 - [ ] **Step 5: grep 4 个 div id**
 
-Run: `grep -oE "id=\"echarts-(sunburst|streamgraph|network|sankey)\"" output/hr_report/index.html | sort -u`
+Run: `grep -oE "id=\"echarts-(sunburst|streamgraph|network|sankey)\"" output/report/index.html | sort -u`
 Expected: 4 个 id 全部命中
 
 - [ ] **Step 6: wc -c 验证大小**
 
-Run: `wc -c output/hr_report/index.html`
+Run: `wc -c output/report/index.html`
 Expected: 1,500,000-2,000,000 bytes (1.5-2MB)
 
 ### Task 5.2: sed 修复 README.md 模板 (沿用上次部署方案)
@@ -1351,9 +1351,9 @@ Run:
 sed -i.bak \
   -e 's|tcfd-hr-report|tcfd-report|g' \
   -e 's|<username>|somAzzz|g' \
-  output/hr_report/README.md
-grep -c "tcfd-hr-report" output/hr_report/README.md && echo "FAIL" || echo "OK"
-rm output/hr_report/README.md.bak
+  output/report/README.md
+grep -c "tcfd-hr-report" output/report/README.md && echo "FAIL" || echo "OK"
+rm output/report/README.md.bak
 ```
 Expected: `OK`
 
@@ -1361,7 +1361,7 @@ Expected: `OK`
 
 - [ ] **Step 1: 启动本地 HTTP 服务 (背景)**
 
-Run (in background): `cd /home/bo/projects/python/frequency_analyzer/output/hr_report && python3 -m http.server 8765 &`
+Run (in background): `cd /home/bo/projects/python/frequency_analyzer/output/report && python3 -m http.server 8765 &`
 
 - [ ] **Step 2: 用 Playwright 打开页面, 截图, 人工目视检查 4 图**
 
@@ -1378,17 +1378,17 @@ Run: `pkill -f "http.server 8765"`
 
 - [ ] **Step 1: 检查 README.md 修复成功**
 
-Run: `cat output/hr_report/README.md | grep -E "tcfd-report|somAzzz"`
+Run: `cat output/report/README.md | grep -E "tcfd-report|somAzzz"`
 Expected: 包含 `https://somAzzz.github.io/tcfd-report/` 和 `somAzzz`
 
-- [ ] **Step 2: 在 output/hr_report 中 git init (沿用上次 plan)**
+- [ ] **Step 2: 在 output/report 中 git init (沿用上次 plan)**
 
 Run:
 ```bash
 cd /home/bo/projects/python/frequency_analyzer
-git init output/hr_report
-git -C output/hr_report add -A
-git -C output/hr_report -c user.email="noreply@github.com" -c user.name="somAzzz" commit -m "init: HR report v2 (ECharts 4 高级图)"
+git init output/report
+git -C output/report add -A
+git -C output/report -c user.email="noreply@github.com" -c user.name="somAzzz" commit -m "init: HR report v2 (ECharts 4 高级图)"
 ```
 
 - [ ] **Step 3: 推送 (用 gh CLI, 沿用上次 plan)**
@@ -1396,8 +1396,8 @@ git -C output/hr_report -c user.email="noreply@github.com" -c user.name="somAzzz
 Run:
 ```bash
 cd /home/bo/projects/python/frequency_analyzer
-git -C output/hr_report remote add upstream https://github.com/somAzzz/tcfd-report.git 2>/dev/null || git -C output/hr_report remote set-url upstream https://github.com/somAzzz/tcfd-report.git
-git -C output/hr_report push upstream main --force
+git -C output/report remote add upstream https://github.com/somAzzz/tcfd-report.git 2>/dev/null || git -C output/report remote set-url upstream https://github.com/somAzzz/tcfd-report.git
+git -C output/report push upstream main --force
 ```
 Expected: `+ abc1234...def5678 main -> main (forced update)`
 
@@ -1472,10 +1472,10 @@ echo "=== 3. 测试新增 ==="
 uv run pytest tests/test_visualization/ --co -q | wc -l
 
 echo "=== 4. HTML 大小 ==="
-wc -c output/hr_report/index.html | awk '{print $1/1024/1024 " MB"}'
+wc -c output/report/index.html | awk '{print $1/1024/1024 " MB"}'
 
 echo "=== 5. 4 图 init ==="
-grep -c "echarts.init" output/hr_report/index.html
+grep -c "echarts.init" output/report/index.html
 
 echo "=== 6. 线上 ==="
 curl -I -s -o /dev/null -w "HTTP %{http_code}\n" https://somAzzz.github.io/tcfd-report/
@@ -1498,7 +1498,7 @@ curl -I -s -o /dev/null -w "HTTP %{http_code}\n" https://somAzzz.github.io/tcfd-
 1. ❌ 改 visualization 任何其它模块 (anonymize / module_graph / static_charts / translations)
 2. ❌ Stage 2 (UI/UX + Alpine.js + LLM tooltip) — 后续 spec
 3. ❌ 重跑任何数据流水线 (cooccurrence / clustering)
-4. ❌ 改 build_hr_report.py 的 GitHub 部署流程 (沿用上次 plan 验证过的)
+4. ❌ 改 build_report.py 的 GitHub 部署流程 (沿用上次 plan 验证过的)
 5. ❌ 引入构建工具 (npm/webpack), 保持单文件 + CDN
 6. ❌ 把模块图从 Mermaid 迁到 ECharts (Stage 2 决定)
 7. ❌ 改 sankey 阶段 2 (chunk) 估算值的精度 (±50% 误差, 后续可接入真实计数)

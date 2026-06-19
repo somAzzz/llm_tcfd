@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build the HR report (single-file interactive HTML).
+"""Build the report (single-file interactive HTML).
 
 Usage:
-    python scripts/build_hr_report.py --output output/hr_report/
-    python scripts/build_hr_report.py --output output/hr_report/email/ --target email-attachment
+    python scripts/build_report.py --output output/report/
+    python scripts/build_report.py --output output/report/email/ --target email-attachment
 
 The script:
 1. Loads all JSONL results from output/evaluate_cooccurrence/
@@ -62,9 +62,9 @@ def _run_pytest_collect() -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build the HR report")
+    parser = argparse.ArgumentParser(description="Build the report")
     parser.add_argument(
-        "--output", type=Path, default=Path("output/hr_report"),
+        "--output", type=Path, default=Path("output/report"),
         help="Output directory for the report",
     )
     parser.add_argument(
@@ -174,13 +174,13 @@ To rebuild the report from the source repo:
 
 ```bash
 # 1. From the main frequency_analyzer repo:
-PYTHONPATH=src python scripts/build_hr_report.py --output output/hr_report/
+PYTHONPATH=src python scripts/build_report.py --output output/report/
 
 # 2. Run the pre-push leakage check (script auto-runs it too, must exit 0):
-python scripts/check_leakage.py output/hr_report/index.html
+python scripts/check_leakage.py output/report/index.html
 
 # 3. Stage and push to tcfd-report (NOT the main repo):
-cd output/hr_report
+cd output/report
 git add index.html README.md
 git commit -m "vNN: <description>"
 git push origin main

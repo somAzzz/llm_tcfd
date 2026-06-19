@@ -203,7 +203,7 @@ src/tcfd_extractor/
 ### 6. 工具与脚本(`scripts/`)
 
 - `tcfd_word_bag_validator.py` —— 词袋校验 CLI
-- `build_hr_report.py` —— HR 报告生成编排器(数据 → HTML + 泄漏检查)
+- `build_report.py` —— 报告生成编排器(数据 → HTML + 泄漏检查)
 - `check_leakage.py` —— Pre-push 泄漏检查(公司名 + 邮箱 + 电话 + TODO 等模式)
 
 ## 可视化报告
@@ -225,16 +225,16 @@ src/tcfd_extractor/
 
 ```bash
 # 生成报告(默认 GitHub Pages 模式,CDN 加载 JS,~1.5 MB)
-python scripts/build_hr_report.py --output output/hr_report/
+python scripts/build_report.py --output output/report/
 
 # 邮箱附件模式(JS 内联,无需网络,~4 MB)
-python scripts/build_hr_report.py --output output/hr_report/email/ --inline
+python scripts/build_report.py --output output/report/email/ --inline
 ```
 
 ### 输出结构
 
 ```
-output/hr_report/
+output/report/
 ├── index.html      # 自包含的交互式报告(打开即用)
 ├── README.md       # 部署说明
 └── .nojekyll       # GitHub Pages 配置
@@ -251,7 +251,7 @@ output/hr_report/
 ### 设计原则
 
 - **双层受众**:非技术 HR(30 秒看懂 KPI) + 技术 HR(展开 Tech Deep Dive 看架构)
-- **数据隐私**:公司名单向 SHA-256 哈希(无反向表),`output/hr_report/` 不进 git
+- **数据隐私**:公司名单向 SHA-256 哈希(无反向表),`output/report/` 不进 git
 - **部署友好**:单文件 HTML,可直接 GitHub Pages 部署(详见 spec §14)
 - **泄漏安全**:推送到公开仓库前必须通过 `scripts/check_leakage.py`
 
@@ -348,7 +348,7 @@ uv run pytest --cov=src/tcfd_extractor
 | 项目 | 数值 |
 |---|---|
 | 新增模块 | 8 个(`anonymize` / `translations` / `data_loader` / `static_charts` / `module_graph` / `html_assembler` / `template`) |
-| 新增脚本 | 2 个(`build_hr_report.py` 编排器,`check_leakage.py` 预推送泄漏检查) |
+| 新增脚本 | 2 个(`build_report.py` 编排器,`check_leakage.py` 预推送泄漏检查) |
 | 新增测试 | 65(7 个测试文件) |
 | 全量测试 | 228 passed(目标 ≥ 200) |
 | HTML 报告大小 | 121 KB(CDN 模式) |
@@ -357,7 +357,7 @@ uv run pytest --cov=src/tcfd_extractor
 
 **主要 DoD 验收点**:
 
-- ✅ `output/hr_report/index.html` 可双击打开(无服务器)
+- ✅ `output/report/index.html` 可双击打开(无服务器)
 - ✅ Above-the-fold 含 "annual report" + "climate/tcfd/keyword"
 - ✅ 5 个区块全部渲染(Hero / What We Built / What We Discovered / Engineering / Tech Deep Dive)
 - ✅ 中→英双语 tooltip(关键词原文 + 英文翻译)
@@ -367,7 +367,7 @@ uv run pytest --cov=src/tcfd_extractor
 - ✅ 模块依赖图通过 AST 自动发现(无手维护)
 - ✅ `git diff tests/test_cooccurrence_evaluator.py` 为空(向后兼容)
 
-**GitHub Pages 部署**(推荐):将 `output/hr_report/` 推送到独立的 `tcfd-report` 公开仓库,获得 `https://somAzzz.github.io/tcfd-report/` 链接,可直接放入求职邮件正文。
+**GitHub Pages 部署**(推荐):将 `output/report/` 推送到独立的 `tcfd-report` 公开仓库,获得 `https://somAzzz.github.io/tcfd-report/` 链接,可直接放入求职邮件正文。
 
 ## 贡献
 
