@@ -210,14 +210,16 @@ def build_network(data: dict, theme: dict) -> dict:
         ],
         "roam": theme["global_roam"],
         "draggable": True,
-        # Stage 3.3: 限制绘图区在标题块下方
-        "top": CHART_CONTENT_TOP,
+        # Stage 3.3 round 6: 网络额外加 20px top 缓冲, 防止 force-layout
+        # 软约束边界节点擦标题
+        "top": CHART_CONTENT_TOP + 20,
         "bottom": CHART_CONTENT_BOTTOM,
         "left": 20,
         "right": 20,
         # Stage 3.3 round 5: repulsion 80→150 让节点更分散, 避免 cluster
         # 顶部节点压到 subtext/标题
-        "force": {"repulsion": 150, "edgeLength": 50},
+        # Stage 3.3 round 6: gravity 0.1 让节点向 center 拉, 减少越界
+        "force": {"repulsion": 150, "edgeLength": 50, "gravity": 0.1},
         "emphasis": {
             "focus": "adjacency",
             "label": {"show": True, "position": "right", "fontSize": 11,

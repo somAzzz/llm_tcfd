@@ -422,6 +422,21 @@ class TestTitleDoesNotOverlapChartContent:
             "top nodes will overlap title"
         )
 
+    def test_network_has_extra_top_buffer_above_chrome_chart(self):
+        """Stage 3.3 round 6: 网络 series.top 比 chrome chart (sankey) 多 20px,
+        防止 force-layout 软约束导致顶部节点擦标题。
+        """
+        data = {
+            "nodes": [{"id": "a", "name": "a", "symbolSize": 15, "category": "Policy", "value": 1}],
+            "links": [],
+        }
+        opt_nw = build_network(data, TCFD_THEME_CONFIG)
+        opt_sk = build_sankey({"nodes": [{"name": "x"}], "links": []}, TCFD_THEME_CONFIG)
+        assert opt_nw["series"][0]["top"] > opt_sk["series"][0]["top"], (
+            f"network top={opt_nw['series'][0]['top']} should be > "
+            f"sankey top={opt_sk['series'][0]['top']} (force-layout needs extra buffer)"
+        )
+
     def test_sunburst_radius_reduced_to_avoid_title_overlap(self):
         """Sunburst 外圈半径 ≤ 85%, 避免外圈边缘压到 subtext。"""
         data = [{"name": "Policy", "children": [{"name": "A", "children": []}]}]
