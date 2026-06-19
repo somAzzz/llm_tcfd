@@ -212,7 +212,14 @@ def load_sunburst_data(clusters_dir: Path, theme: dict | None = None) -> list[di
                 "itemStyle": {"color": cluster_color},
                 "children": kw_children,
             })
-        result.append({"name": display_en, "children": children})
+        # dim root 节点: 注入亮色 itemStyle.color (无 alpha), ECharts 优先 per-node
+        # color 而非 levels[1] 的 list 循环。levels[1] 的 list 行为在不同 ECharts
+        # 版本/数据形状下不可靠, 直接在 root 写死颜色最稳。
+        result.append({
+            "name": display_en,
+            "itemStyle": {"color": dim_hex},
+            "children": children,
+        })
     return result
 
 

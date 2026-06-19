@@ -243,6 +243,19 @@ def test_load_sunburst_data_injects_dim_color_inheritance_per_cluster(tmp_path):
     for dim_name, expected_color in expected_colors.items():
         dim = next(d for d in result if d["name"] == dim_name)
         assert dim["children"], f"{dim_name} has no clusters"
+        # dim root must carry the bright per-node color (no alpha) so the
+        # inner ring is unambiguously colored even when ECharts' levels[1]
+        # list-cycling fails to apply (older versions / different data shapes).
+        assert "itemStyle" in dim, (
+            f"{dim_name} dim root missing itemStyle.color — inner ring "
+            f"will fall back to the default palette or stay dark: {dim}"
+        )
+        assert dim["itemStyle"]["color"] == TCFD_THEME_CONFIG["colors"][
+            {"Policy": "policy", "Market": "market", "Technology": "tech"}[dim_name]
+        ], (
+            f"{dim_name} dim root color must be the bright Primer value "
+            f"({TCFD_THEME_CONFIG['colors']}), got {dim['itemStyle']['color']}"
+        )
         cluster = dim["children"][0]
         assert "itemStyle" in cluster, (
             f"{dim_name} cluster missing itemStyle (color inheritance broken): {cluster}"
