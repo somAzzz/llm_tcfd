@@ -804,6 +804,8 @@ Expected: 全失败 (template 旧版没有 Inter/Alpine/data-theme/侧栏)。
 
 整体重写 template.py (这是 Stage 2 最大改动)。 完整代码见 `spec §4-7`, 实施时直接照搬 spec 内联 `<script>` 块 + Alpine 表达式, 不要重新设计。
 
+**关键设计**: 使用 `Template(r"""...""")` **原始字符串** 而非普通三引号字符串。 原因: 内联 `<script>` 中含 JS 正则 `\d+` / `\w` / `\s` / `\x00`, 在 raw string 中 `\` 不会被 Python 二次转义, 渲染出的 HTML/JS 直接是 spec §5.3/§7.2 期望的单反斜杠正则。 如果用普通 `Template("""...""")`, 必须把每个 `\` 写成 `\\`, 否则渲染出 `\\d+` 等被 JS 当作字面 `d+` 处理的无效正则, 静默 break `__hrTranslate` 客户端兜底翻译。 Jinja 占位符 `{{ x }}` 不受 raw string 影响 (它们是 Jinja 模板语法, 由 Jinja 解析器处理)。
+
 - [ ] **Step 3: 重写 `template.py`**
 
 完整替换 `src/tcfd_extractor/visualization/template.py`。 关键内容(spec §4-7 综合):
@@ -814,7 +816,7 @@ from __future__ import annotations
 
 from jinja2 import Template
 
-HTML_TEMPLATE = Template("""<!DOCTYPE html>
+HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
@@ -1593,19 +1595,19 @@ git commit -m "feat(html_assembler): Stage 2 — build_context_index() + 注入 
 
 **目标**: 把 Stage 2 全部代码改动串起来, 跑 build 脚本, 验证 HTML 体积/泄漏检查/视觉 7 项/部署 200。
 
+**重要前置**: Chunk 5 所有命令假定 `cwd` 是主仓根目录 `/home/bo/projects/python/frequency_analyzer` (build 脚本硬编码 `results_root=Path("output/evaluate_cooccurrence")` 相对 cwd)。 步骤 1, 2, 3, 4, 5, 11 都在主仓根执行; 步骤 6-8 `cd output/hr_report` 后独立 repo 操作; 步骤 12 回到主仓根。 用绝对路径或显式 `cd` 避免误从 deploy repo 目录跑 build。
+
 ### Task 5.1: 跑 build 脚本
 
 - [ ] **Step 1: 清掉旧的 output/hr_report**
 
-Run: `rm -rf /home/bo/projects/python/frequency_analyzer/output/hr_report/*`
-注意: 保留 `output/hr_report/.git` (它是独立 deploy repo), 但清掉 index.html / README.md / .nojekyll。 实际上 `scripts/build_hr_report.py` 会 overwrite, 直接跑即可, 但为干净起见先 rm。
-
-更安全的写法:
 ```bash
 cd /home/bo/projects/python/frequency_analyzer
 rm -f output/hr_report/index.html output/hr_report/README.md
 # 保留 .git 和 .nojekyll
 ```
+
+注意: 保留 `output/hr_report/.git` (它是独立 deploy repo), 但清掉 index.html / README.md。 `scripts/build_hr_report.py` 会 overwrite index.html 和 README.md, 直接跑即可, 但为干净起见先 rm。
 
 - [ ] **Step 2: 跑 build_hr_report.py**
 
@@ -1669,7 +1671,7 @@ Expected: `HTTP/2 200`
 
 对 `https://somAzzz.github.io/tcfd-report/` 跑 WebFetch, 验证:
 
-(a) **暗色默认**: HTML 顶部 `<html data-theme="dark">` 出现, body background `#0f1419`
+(a) **暗色默认**: HTML 顶部 `<html data-theme="dark">` 出现, `<style>` 中含 `:root[data-theme="dark"] { --bg: #0f1419; }` (body 实际写的是 `background: var(--bg)`, 间接引用)
 (b) **主题切换按钮**: 出现 `hr-theme-toggle` class + `@click="$store.hrApp.toggleTheme()"`
 (c) **Inter 字体**: `<link>` 含 `Inter:wght@400;500;600;700&display=swap`
 (d) **全英文**: grep `[\u4e00-\u9fff]` 命中 = 0 (除 `[[ZH: ...]]` 降级占位)
@@ -1679,14 +1681,16 @@ Expected: `HTTP/2 200`
 
 如果 (e)/(f) 的 edge key 不匹配 (reviewer 反馈过的 bug) — 回到 Chunk 3 template.py 的 `bindClickHandlers` 函数, 确认 `const pair = [source, target].sort(); const edgeKey = \`${pair[0]}->${pair[1]}\`;` 与 build_context_index 中的 `pair = sorted([ka, kb])` 一致。
 
-- [ ] **Step 11: 验证清单硬指标 (spec §13)**
+- [ ] **Step 11: 验证清单硬指标 (spec §13 第 1-11 项, 在主仓根执行)**
 
 ```bash
-# 1. echarts.py 中文命中 ≤ 5 (仅 docstring)
+cd /home/bo/projects/python/frequency_analyzer
+
+# 1. echarts.py 中文命中 ≤ 5 (仅 docstring 注释允许)
 grep -P '[\x{4e00}-\x{9fff}]' src/tcfd_extractor/visualization/echarts.py | wc -l
 # Expected: <= 5
 
-# 2. template.py 中文命中 = 0
+# 2. template.py 中文命中 = 0 (template 100% 英文)
 grep -P '[\x{4e00}-\x{9fff}]' src/tcfd_extractor/visualization/template.py | wc -l
 # Expected: 0
 
@@ -1706,18 +1710,30 @@ grep -c "alpinejs" output/hr_report/index.html
 grep -c "__hrTranslate" output/hr_report/index.html
 # Expected: >= 5
 
-# 7. __hrContextIndex 命中 1
+# 7. __hrContextIndex 命中 = 1
 grep -c "__hrContextIndex" output/hr_report/index.html
 # Expected: 1
 
-# 8. HTML 体积
-wc -c output/hr_report/index.html
-# Expected: 2.5MB-3.5MB (2500000-3500000 bytes)
+# 8. pytest 全绿 + Stage 2 新增 ≥ 16 test
+uv run pytest tests/test_visualization/ -v
+# Expected: 全部 PASS, 新增 test 数 = 5+13+4+5 = 27 case (远超过 ≥ 16 下限)
 
-# 9. 泄漏检查
+# 9. build 脚本退出码 0
+uv run python scripts/build_hr_report.py --output output/hr_report/
+echo "exit_code: $?"
+# Expected: exit_code: 0
+
+# 10. HTML 体积
+wc -c output/hr_report/index.html
+# Expected: 2500000-3500000 bytes (2.5-3.5MB)
+
+# 11. 泄漏检查
 python scripts/check_leakage.py output/hr_report/index.html
-# Expected: 退出码 0
+echo "exit_code: $?"
+# Expected: exit_code: 0
 ```
+
+注: spec §13 全部 13 项 = Step 11 的 1-11 (硬指标 grep/build/test/体积) + Step 10 的 (a-g) (浏览器视觉 7 项) + Step 9 (HTTP 200) = 11 + 7 + 1 = 19 项小项。 11 项硬指标全过是必要条件, 7+1 项视觉/部署是充分条件。
 
 - [ ] **Step 12: 最终 commit (主仓元数据更新)**
 
@@ -1733,7 +1749,7 @@ git status
 
 向用户报告:
 - Stage 2 部署完成, 4 个主仓 commits + 1 个 deploy repo commit
-- 验证清单 13 项全绿
+- 验证清单全绿: 11 项硬指标 (Step 11) + 7 项视觉 (Step 10) + 1 项远程 200 (Step 9) = 19 项
 - URL: https://somAzzz.github.io/tcfd-report/
 - 测试统计: Stage 1 原 ~18 case + Stage 2 新增 ≥ 16 case = ≥ 34 case
 - HTML 体积: N.NN MB (在 2.5-3.5MB 范围)
