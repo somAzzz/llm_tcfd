@@ -77,10 +77,11 @@ def _get_base_option(title: str, subtitle: str | None = None) -> dict:
 
 
 # Stage 3.3: 标题块 (title + subtext) 高度 ≈ 50px, 给上层 builder 参考
-# Stage 3.3 调优: 实测 force-layout 节点会越界 ~10px, 加上视觉舒适余量 →
-# series.top 用 100 (round 3), 防止最上面的节点压到 subtext/标题
-CHART_CONTENT_TOP = 100
-CHART_CONTENT_BOTTOM = 30
+# Stage 3.3 调优 round 4: 实测 force-layout 节点 cluster 中心 ≈ layout 区域
+# 中心, 节点会向上 spread ~40px → series.top 用 120, container 高度 600
+# 才能让最上面的节点离 subtext 有 ≥ 30px 安全间距
+CHART_CONTENT_TOP = 120
+CHART_CONTENT_BOTTOM = 40
 
 
 # builder 函数将在 Task 2.2-2.5 添加
@@ -139,14 +140,14 @@ def build_streamgraph(data: dict, theme: dict) -> dict:
         "Drag the slider to zoom into a time range"
     )
     # legend name 已经从 data["series"] 拿, 由 data_loader 翻译
-    # Stage 3.3 调优: legend top = 80 (与 CHART_CONTENT_TOP=100 协调)
-    opt["legend"] = {"top": 80, "data": [s["name"] for s in data["series"]]}
+    # Stage 3.3 round 4: legend top = 100 (与 CHART_CONTENT_TOP=120 协调)
+    opt["legend"] = {"top": 100, "data": [s["name"] for s in data["series"]]}
     opt["xAxis"] = {"type": "category", "boundaryGap": False,
                     "data": data["years"]}
     opt["yAxis"] = {"type": "value"}
-    # Stage 3.3 调优: grid.top=115 给 legend 下沿留 10px, bottom=55 给
+    # Stage 3.3 round 4: grid.top=135 给 legend 下沿留 15px, bottom=65 给
     # dataZoom slider 留空间
-    opt["grid"] = {"top": 115, "left": 60, "right": 30, "bottom": 55,
+    opt["grid"] = {"top": 135, "left": 60, "right": 30, "bottom": 65,
                    "containLabel": True}
     opt["dataZoom"] = [
         {"type": "slider", "xAxisIndex": 0, "start": 0, "end": 100,

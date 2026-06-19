@@ -405,10 +405,10 @@ class TestTitleDoesNotOverlapChartContent:
             f"sunburst center y={center_y_pct}% should be >= 50% (lower) for title clearance"
 
     def test_sankey_top_matches_other_charts(self):
-        """Sankey series.top 应该和 sunburst/network 一致, 都用 CHART_CONTENT_TOP=100。"""
+        """Sankey series.top 应该和 sunburst/network 一致, 都用 CHART_CONTENT_TOP=120。"""
         opt = build_sankey({"nodes": [{"name": "x"}], "links": []}, TCFD_THEME_CONFIG)
-        # Stage 3.3 round 3: top = 100 给标题/force-layout 节点足够空间
-        assert opt["series"][0]["top"] == 100
+        # Stage 3.3 round 4: top = 120 给标题和 force-layout 节点足够空间
+        assert opt["series"][0]["top"] == 120
 
     def test_sunburst_radius_reduced_to_avoid_title_overlap(self):
         """Sunburst 外圈半径 ≤ 85%, 避免外圈边缘压到 subtext。"""
