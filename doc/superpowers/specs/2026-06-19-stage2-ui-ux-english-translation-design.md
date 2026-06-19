@@ -147,6 +147,12 @@ localStorage key: `hr-theme`, 值 `'dark'` | `'light'`. 首次访问默认 `dark
   --aside-border: #e0e0e0;
   --code-bg: #f5f5f5;
 }
+
+/* 全局过渡: 主题切换时颜色平滑 (避免突兀跳变) */
+body, section, .kpi-card, header, .hr-side-panel, .callout {
+  transition: background-color 0.25s ease, color 0.25s ease,
+              border-color 0.25s ease;
+}
 ```
 
 **ECharts 主题联动**: 通过 JS 在 `chart.setOption()` 前读取 `document.documentElement.dataset.theme`, 动态调整 option 中的 `textStyle.color` / `axisLine.lineStyle.color` / `splitLine.lineStyle.color`. 见 §6.
@@ -187,7 +193,7 @@ def translate_smart(keyword: str) -> str:
 "政策": "Policy",
 "市场": "Market",
 "技术": "Technology",
-"无": "None",
+"无": "N/A",  # 无维度 (N/A 显式优于 "None", 避免与 Python None 混淆)
 
 # 聚类 math_label
 "聚类A": "Cluster A",
@@ -207,7 +213,7 @@ def translate_smart(keyword: str) -> str:
 "流水线": "Pipeline",
 "数据提纯": "Data Refinement",
 "分块": "Chunking",
-"维度归类": "Dimension Classification",
+"维度归类": "By Dimension",  # 比 "Dimension Classification" 简洁
 "阶段1": "Stage 1",
 "阶段2": "Stage 2",
 "阶段3": "Stage 3",
@@ -235,57 +241,146 @@ def translate_smart(keyword: str) -> str:
 "点击查看详情": "Click to view details",
 ```
 
+**降级标记统一**: `translate()` 和 `translate_smart()` 都使用 `[[ZH: xxx]]` (双中括号) 作为降级标记, 与现有 `translations.py:148` 的 `[ZH: ...]` (单中括号) 不一致 — 改 `translate()` 也用 `[[ZH: xxx]]` 以统一, 避免未来阅读混淆.
+
 ### 5.3 翻译注入点
 
 | 位置 | 翻译内容 | 实现方式 |
 |---|---|---|
 | `echarts.py` 各 builder | chart title / subtitle / axis label / legend | 直接硬编码英文 (避免运行时查表性能开销) |
 | `echarts.py` tooltip formatter | 节点名 / 维度名 / 频次 | `formatter: "function(p) { return window.__hrTranslate(p.name) + ' (' + p.value + ' occurrences)'; }"` |
-| `echarts.py` sankey label formatter | 节点名剥离 stage{N}_ 前缀 | 沿用 Stage 1, 但加 `_t()` 翻译后置 |
+| `echarts.py` sankey label formatter | 节点名剥离 stage{N}_ 前缀 + 翻译 | 沿用 Stage 1, formatter 内调用 `window.__hrTranslate` (降级回退 `(s => s)`) |
 | `template.py` 静态文本 | header / sections / captions / Mermaid | 直接写英文 |
 | `template.py` 侧栏模板 | 标题 / 维度徽章 | Alpine 模板表达式 `x-text="panel.dimension ? window.__hrTranslate(panel.dimension) : ''"` |
-| `html_assembler.py` 注入 | 节点 → context 列表索引 | JSON 注入到 `<script>`, context 文本也走 `translate_smart()` (中英对照) |
+| `html_assembler.py` 注入 | `window.__hrTranslate` + `window.__hrContextIndex` | **注入位置**: `<head>` 中, ECharts CDN 之后, Alpine `<script defer>` 之前 (确保两个 consumer 都能找到) |
+
+**`__hrTranslate` 注入定义** (html_assembler.py 注入, ~3KB inline `<script>`):
+
+```javascript
+window.__hrTranslate = function(keyword) {
+  // 客户端兜底: 服务端 Python 端应该已经把所有 display-facing 字符串翻译好了
+  // 客户端只对运行时动态值 (ECharts 回调里取出的 p.name) 做兜底翻译
+  if (!keyword) return '';
+  const map = window.__hrTranslateMap || {};
+  if (map[keyword]) return map[keyword];
+  if (/^[\x00-\x7F]+$/.test(keyword)) return keyword;  // 纯 ASCII
+  return '[[ZH: ' + keyword.replace(/[^\w\s]+/g, '').trim() + ']]';
+};
+```
+
+**`__hrTranslateMap` 来源**: `html_assembler.py` 把 `KEYWORD_TRANSLATIONS` 全量 dict dump 成 JSON 注入到 `window.__hrTranslateMap` (约 6KB 压缩后 ~3KB). 客户端查表; 命中率 100% 的话零降级. 命中率低时降级走 `[[ZH: xxx]]`.
 
 ## 6. ECharts 暗色主题适配
 
-### 6.1 动态主题切换
+### 6.1 主题切换策略: dispose + reinit (committed)
 
-每个 `chart.setOption(opt)` 之前, 读取 CSS 变量, 动态调整 option:
+ECharts 主题切换采用 **dispose + reinit** 方案, **不用 patch**:
+
+**理由**:
+- patch 路径需要深拷贝 + 大量字段判断, 容易遗漏 (sunburst 内部样式, sankey 边色等)
+- dispose+reinit 200ms 内完成, 用户感知不到
+- 简单稳定, 100% 复用 init 时的同一份 code path
+
+**`rebuildAllCharts()` 完整实现** (template.py 内联 `<script>`):
 
 ```javascript
-function applyTheme(opt) {
-  const theme = document.documentElement.dataset.theme;
+// 全局 chart 实例缓存
+window.__hrCharts = {};
+
+function buildChart(chartId, opt) {
+  const el = document.getElementById(chartId);
+  if (!el) return;
+  // 销毁旧实例 (如果存在)
+  if (window.__hrCharts[chartId]) {
+    window.__hrCharts[chartId].dispose();
+  }
+  // 应用主题 (调色板已硬编码, 只调 text/axis 颜色)
+  opt = applyTheme(opt, document.documentElement.dataset.theme);
+  // 新建
+  const chart = echarts.init(el);
+  chart.setOption(opt);
+  window.__hrCharts[chartId] = chart;
+  // 绑定 click → Alpine panel
+  bindClickHandlers(chart, chartId);
+  return chart;
+}
+
+function rebuildAllCharts() {
+  buildChart('echarts-sunburst',     window.__hrOpts.sunburst);
+  buildChart('echarts-streamgraph',  window.__hrOpts.streamgraph);
+  buildChart('echarts-network',      window.__hrOpts.network);
+  buildChart('echarts-sankey',       window.__hrOpts.sankey);
+}
+
+function applyTheme(opt, theme) {
   const isDark = theme === 'dark';
   const fg = isDark ? '#e6e6e6' : '#222';
   const muted = isDark ? '#8b95a1' : '#666';
-  const cardBg = isDark ? '#1a1f24' : '#ffffff';
-
-  // 全局 textStyle
-  opt.textStyle = { ...opt.textStyle, color: fg };
-
-  // 标题
-  if (opt.title) opt.title.textStyle = { ...opt.title.textStyle, color: fg };
-
-  // X/Y 轴
+  opt = JSON.parse(JSON.stringify(opt));  // 深拷贝避免污染原 opt
+  opt.textStyle = Object.assign({}, opt.textStyle, { color: fg });
+  if (opt.title) opt.title.textStyle = Object.assign({}, opt.title.textStyle, { color: fg });
   ['xAxis', 'yAxis'].forEach(k => {
     if (opt[k]) {
-      opt[k].axisLine = { lineStyle: { color: muted } };
-      opt[k].axisLabel = { color: muted };
-      opt[k].splitLine = { lineStyle: { color: muted, opacity: 0.2 } };
+      opt[k] = Object.assign({}, opt[k], {
+        axisLine: { lineStyle: { color: muted } },
+        axisLabel: { color: muted },
+        splitLine: { lineStyle: { color: muted, opacity: 0.2 } },
+      });
     }
   });
-
-  // Legend
-  if (opt.legend) opt.legend.textStyle = { color: fg };
-
+  if (opt.legend) opt.legend.textStyle = Object.assign({}, opt.legend.textStyle, { color: fg });
   return opt;
 }
 
-// 4 个图都包装
-echarts.init(document.getElementById('echarts-sunburst')).setOption(applyTheme({{ sunburst_json|safe }}));
+// init: 把服务端注入的 4 个 opt 存到全局, 然后首次构建
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof echarts === 'undefined') {
+    document.querySelectorAll('.echarts-chart').forEach(el => {
+      el.innerHTML = '<div style="background:#f0f0f0;color:#666;text-align:center;line-height:400px;">Load failed</div>';
+    });
+    return;
+  }
+  window.__hrOpts = {
+    sunburst:    {{ sunburst_json|safe }},
+    streamgraph: {{ streamgraph_json|safe }},
+    network:     {{ network_json|safe }},
+    sankey:      {{ sankey_json|safe }},
+  };
+  rebuildAllCharts();
+});
 ```
 
-**简化方案**: ECharts 支持 `chart.dispose()` + 重新 init。 切主题时销毁旧实例, 用新 option 重建。 重建比 patch 简单且稳定, 牺牲一点切换动画 (200ms 内完成).
+**`bindClickHandlers(chart, chartId)`** (template.py 同样内联):
+
+```javascript
+function bindClickHandlers(chart, chartId) {
+  chart.on('click', function(params) {
+    if (chartId === 'echarts-network' && params.dataType === 'node') {
+      const kw = params.data.name;
+      const contexts = (window.__hrContextIndex.keywords[kw] || []).slice(0, 3);
+      window.Alpine.store('hrApp').openPanel({
+        type: 'node',
+        title: window.__hrTranslate(kw),
+        dimension: window.__hrTranslate(params.data.category || ''),
+        contexts: contexts,
+      });
+    } else if (chartId === 'echarts-sankey' && params.dataType === 'edge') {
+      // Sankey edge: source/target 在 stage{N}_ 命名空间, 翻译需用 post-formatter 名
+      const stripPrefix = s => (s || '').replace(/^stage\d+_/, '');
+      const source = stripPrefix(params.data.source);
+      const target = stripPrefix(params.data.target);
+      const edgeKey = `${source}->${target}`;
+      const contexts = (window.__hrContextIndex.sankey[edgeKey] || []).slice(0, 3);
+      window.Alpine.store('hrApp').openPanel({
+        type: 'link',
+        title: `${window.__hrTranslate(source)} → ${window.__hrTranslate(target)}`,
+        contexts: contexts,
+      });
+    }
+    // 其它点击 (e.g., 非数据区) → 不响应, panel 保持当前状态
+  });
+}
+```
 
 ### 6.2 颜色调色板 (暗色友好)
 
@@ -321,79 +416,140 @@ TCFD_THEME_CONFIG = {
 
 ## 7. Alpine.js 应用范围 (动静分离)
 
-### 7.1 全局 state (body 根)
+### 7.1 Alpine store 注册 (`<head>` + body 入口)
+
+**Alpine 集成模式 (committed)**: 用 **Alpine.store** (而非 inline `x-data`), 在 `Alpine.start()` 之前注册全局 store. 优点: 跨组件共享状态, ECharts `chart.on('click')` 回调通过 `window.Alpine.store('hrApp')` 访问, 避免脆弱的 DOM 查询 (`document.querySelector('[x-data]').__x.$data`).
+
+**Alpine CDN URL (locked)**: `https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js` (defer load, ~15KB gzipped, MIT license, 锁版本). Validation: `grep -c "alpinejs@3.13" output/hr_report/index.html` 命中 1.
+
+**Inter 字体 CDN URL (locked)**: `https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap` — `display=swap` 避免 FOIT, 字体加载失败时回退到 system-ui, 加载完后平滑替换.
 
 ```html
-<body x-data="{
-  theme: localStorage.getItem('hr-theme') || 'dark',
-  panel: null,
-  toggleTheme() {
-    this.theme = this.theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('hr-theme', this.theme);
-    document.documentElement.dataset.theme = this.theme;
-    rebuildAllCharts();  // 重新 4 个图实例, 应用新主题
-  },
-  openPanel(data) { this.panel = data; },
-  closePanel() { this.panel = null; }
-}"
-x-init="document.documentElement.dataset.theme = theme">
+<head>
+  ...
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <script>
+    // 注入: 翻译 map + context 索引 (由 html_assembler.py 渲染)
+    window.__hrTranslateMap = {{ translate_map_json|safe }};
+    window.__hrContextIndex = {{ context_index_json|safe }};
+    window.__hrTranslate = function(kw) { /* 见 §5.3 */ };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body x-data
+      x-init="
+        document.documentElement.dataset.theme = localStorage.getItem('hr-theme') || 'dark';
+        Alpine.store('hrApp', {
+          theme: localStorage.getItem('hr-theme') || 'dark',
+          panel: null,
+          toggleTheme() {
+            this.theme = this.theme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('hr-theme', this.theme);
+            document.documentElement.dataset.theme = this.theme;
+            if (typeof rebuildAllCharts === 'function') rebuildAllCharts();
+          },
+          openPanel(data) { this.panel = data; },
+          closePanel() { this.panel = null; },
+        });
+      ">
+  <button @click="$store.hrApp.toggleTheme()"
+          class="hr-theme-toggle"
+          :aria-label="`Switch to ${$store.hrApp.theme === 'dark' ? 'light' : 'dark'} mode`">
+    <span x-show="$store.hrApp.theme === 'dark'">☀️</span>
+    <span x-show="$store.hrApp.theme === 'light'">🌙</span>
+  </button>
 ```
 
 ### 7.2 ECharts → Alpine 联动 (click)
 
-```javascript
-// Network chart
-networkChart.on('click', params => {
-  if (params.dataType === 'node') {
-    const keyword = params.data.name;
-    const contexts = (window.__hrContextIndex.keywords[keyword] || []).slice(0, 3);
-    Alpine.store('hrApp').openPanel({
-      type: 'node',
-      title: window.__hrTranslate(keyword),
-      dimension: params.data.category,
-      contexts: contexts
-    });
-  }
-});
+**Escape hatch 定义** (你提的 §2.1 / §9 风险):
 
-// Sankey chart
-sankeyChart.on('click', params => {
-  if (params.dataType === 'edge') {
-    const source = params.data.source;
-    const target = params.data.target;
-    const contexts = (window.__hrContextIndex.sankey[`${source}->${target}`] || []).slice(0, 3);
-    Alpine.store('hrApp').openPanel({
-      type: 'link',
-      title: `${window.__hrTranslate(source)} → ${window.__hrTranslate(target)}`,
-      contexts: contexts
-    });
-  }
-});
+1. **re-bind after dispose**: `buildChart()` 每次都调 `bindClickHandlers()`, 旧 chart `dispose()` 后 click 监听器自动失效, 新 chart 重新绑定. 不需要手动 `off()`.
+2. **非数据区点击**: 只匹配 `params.dataType === 'node'` / `'edge'`. 其它 (`'axisLabel'` / `'legend'` / 空白) 不响应, panel 保持当前状态 (不关闭). 这给用户"误点可恢复"的安全感.
+3. **Event delegation**: 每个 chartId 一个独立 handler, 在 `bindClickHandlers(chart, chartId)` 内 `if/else if` 分发. 不全局委托, 避免误捕.
+
+```javascript
+function bindClickHandlers(chart, chartId) {
+  chart.on('click', function(params) {
+    if (chartId === 'echarts-network' && params.dataType === 'node') {
+      const kw = params.data.name;
+      const contexts = (window.__hrContextIndex.keywords[kw] || []).slice(0, 3);
+      window.Alpine.store('hrApp').openPanel({
+        type: 'node',
+        title: window.__hrTranslate(kw),
+        dimension: window.__hrTranslate(params.data.category || ''),
+        contexts: contexts,
+      });
+    } else if (chartId === 'echarts-sankey' && params.dataType === 'edge') {
+      // Sankey edge: source/target 在 stage{N}_ 命名空间, 翻译需用 post-formatter 名
+      const stripPrefix = s => (s || '').replace(/^stage\d+_/, '');
+      const source = stripPrefix(params.data.source);
+      const target = stripPrefix(params.data.target);
+      const edgeKey = `${source}->${target}`;
+      const contexts = (window.__hrContextIndex.sankey[edgeKey] || []).slice(0, 3);
+      window.Alpine.store('hrApp').openPanel({
+        type: 'link',
+        title: `${window.__hrTranslate(source)} → ${window.__hrTranslate(target)}`,
+        contexts: contexts,
+      });
+    }
+    // 其它点击 (axisLabel / legend / 空白) → 不响应, panel 保持
+  });
+}
 ```
 
 **Hover 仍由 ECharts 原生 tooltip 处理** (不经过 Alpine), 避免 DOM 抖动掉帧 (你的 §2.1 反馈).
 
-### 7.3 侧栏 UI
+### 7.3 侧栏 UI (含 backdrop 关闭 + z-index)
 
 ```html
-<aside x-show="panel" x-transition.opacity.duration.250ms
-       @keydown.escape.window="closePanel()"
+<!-- Backdrop: 点击关闭侧栏 -->
+<div x-show="$store.hrApp.panel"
+     x-transition.opacity.duration.200ms
+     @click="$store.hrApp.closePanel()"
+     class="hr-side-panel-backdrop"
+     style="position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 999;"></div>
+
+<aside x-show="$store.hrApp.panel"
+       x-transition:enter="hr-slide-in"
+       x-transition:leave="hr-slide-out"
+       @keydown.escape.window="$store.hrApp.closePanel()"
        class="hr-side-panel"
-       :class="{ 'hr-side-panel--open': panel }">
-  <header>
-    <h3 x-text="panel ? panel.title : ''"></h3>
-    <span class="dim-badge" x-text="panel && panel.dimension ? panel.dimension : ''"></span>
-    <button @click="closePanel()">✕</button>
+       style="position: fixed; right: 0; top: 0; width: 420px; height: 100vh;
+              background: var(--aside-bg); border-left: 1px solid var(--aside-border);
+              box-shadow: -4px 0 12px rgba(0,0,0,0.3); z-index: 1000;
+              transform: translateX(100%); transition: transform 0.25s ease;
+              overflow-y: auto; padding: 1.5rem;">
+  <header style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;
+                 padding-bottom: 0.75rem; border-bottom: 1px solid var(--card-border);">
+    <h3 x-text="$store.hrApp.panel ? $store.hrApp.panel.title : ''"
+        style="margin: 0; flex: 1; font-size: 1.15rem; color: var(--fg);"></h3>
+    <span class="dim-badge"
+          x-show="$store.hrApp.panel && $store.hrApp.panel.dimension"
+          x-text="$store.hrApp.panel ? $store.hrApp.panel.dimension : ''"
+          style="background: var(--accent); color: var(--accent-fg); padding: 0.2rem 0.6rem;
+                 border-radius: 4px; font-size: 0.8rem;"></span>
+    <button @click="$store.hrApp.closePanel()"
+            style="background: none; border: none; color: var(--muted); cursor: pointer;
+                   font-size: 1.25rem; padding: 0.25rem 0.5rem;">✕</button>
   </header>
   <div class="hr-side-panel__body">
-    <template x-if="panel && panel.contexts.length === 0">
-      <p class="muted">No context samples available for this item.</p>
+    <template x-if="$store.hrApp.panel && $store.hrApp.panel.contexts.length === 0">
+      <p style="color: var(--muted); font-style: italic;">No context samples available for this item.</p>
     </template>
-    <template x-for="ctx in panel ? panel.contexts : []" :key="ctx.id">
-      <article class="context-card">
-        <p class="context-zh" x-text="ctx.original"></p>
-        <p class="context-en" x-text="ctx.translated"></p>
-        <footer>
+    <template x-for="ctx in $store.hrApp.panel ? $store.hrApp.panel.contexts : []" :key="ctx.id">
+      <article class="context-card" style="background: var(--card-bg);
+                                            border: 1px solid var(--card-border);
+                                            border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+        <p class="context-zh" x-text="ctx.original"
+           style="color: var(--fg); margin: 0 0 0.5rem 0; font-size: 0.95rem;"></p>
+        <p class="context-en" x-text="ctx.translated"
+           style="color: var(--muted); margin: 0 0 0.75rem 0; font-size: 0.9rem; font-style: italic;"></p>
+        <footer style="display: flex; justify-content: space-between;
+                       color: var(--muted); font-size: 0.8rem;">
           <span x-text="ctx.source"></span>
           <span x-text="ctx.year"></span>
         </footer>
@@ -403,15 +559,24 @@ sankeyChart.on('click', params => {
 </aside>
 ```
 
-CSS: 固定 right: 0, top: 0, width: 420px, height: 100vh, transform: translateX(100%) → translateX(0) 滑入.
+**关闭侧栏的 3 种方式** (验证清单 §13(g) 完整覆盖):
+1. ✕ 按钮: `@click="$store.hrApp.closePanel()"`
+2. ESC 键: `@keydown.escape.window="$store.hrApp.closePanel()"`
+3. 点击 backdrop: `div.hr-side-panel-backdrop` 的 `@click="$store.hrApp.closePanel()"`
+
+**z-index 层次**: backdrop `z-index: 999`, side-panel `z-index: 1000` — panel 在 backdrop 之上, 都在图表 (默认 z-index auto) 之上.
 
 ## 8. context 索引注入 (`html_assembler.py`)
 
-为支持点击侧栏, 需在 HTML 中注入节点→context 的反向索引:
+为支持点击侧栏, 需在 HTML 中注入节点→context 的反向索引 (按 `years` 显式参数, 与 `load_network_data(years=[...])` 一致):
 
 ```python
-def build_context_index(eval_dir, years):
-    """Build keyword → [context, ...] index for tooltip side panel."""
+def build_context_index(eval_dir, years: list[int]) -> dict:
+    """Build keyword → [context, ...] AND sankey-edge → [context, ...] indexes.
+
+    同一 record 同时进 2 个索引: 节点 click 和流道 click 都能找到原文.
+    每个关键词/边最多 3 sample (避免注入过大).
+    """
     index = {"keywords": {}, "sankey": {}}
     for year in years:
         jsonl = eval_dir / str(year) / "results.jsonl"
@@ -425,26 +590,56 @@ def build_context_index(eval_dir, years):
                 ctx = r.get("context", "").strip()
                 if not ctx:
                     continue
-                # 关键词索引
+                entry = {
+                    "id": f"{year}-{r.get('file','')}-{id(r)}",  # 用 id(record) 保证唯一
+                    "original": ctx,
+                    "translated": translate_smart(ctx),
+                    "source": r.get("file", "").split("/")[-1],
+                    "year": year,
+                    "dimension": r.get("dimension", ""),
+                }
+                # 关键词索引 (供 network 节点 click)
                 for kw in (r.get("keyword_a", ""), r.get("keyword_b", "")):
                     if kw:
-                        index["keywords"].setdefault(kw, []).append({
-                            "id": f"{year}-{r.get('file','')}-{len(index['keywords'].get(kw, []))}",
-                            "original": ctx,
-                            "translated": translate_smart(ctx),
-                            "source": r.get("file", "").split("/")[-1],
-                            "year": year,
-                            "dimension": r.get("dimension", ""),
-                        })
-    # 限制每个关键词最多 3 条 (避免注入过大)
-    for kw in index["keywords"]:
-        index["keywords"][kw] = index["keywords"][kw][:3]
+                        index["keywords"].setdefault(kw, []).append(entry)
+                # Sankey 边索引 (供 sankey 流道 click, 边 key 用剥离 stage{N}_ 后的原始 kw 对)
+                ka = r.get("keyword_a", "")
+                kb = r.get("keyword_b", "")
+                if ka and kb:
+                    # edge_key 与 §7.2 click handler 保持一致: 排序后的 a->b
+                    pair = sorted([ka, kb])
+                    edge_key = f"{pair[0]}->{pair[1]}"
+                    index["sankey"].setdefault(edge_key, []).append(entry)
+    # 限制每个关键词/边最多 3 条
+    for k in index["keywords"]:
+        index["keywords"][k] = index["keywords"][k][:3]
+    for k in index["sankey"]:
+        index["sankey"][k] = index["sankey"][k][:3]
     return index
 ```
 
-**注入方式**: `<script>window.__hrContextIndex = {...};</script>` 放在 `<head>` ECharts CDN 之后, Alpine 初始化之前.
+**调用方签名** (html_assembler.py 中):
 
-**体积估算**: ~3 年 × ~5000 行 × 平均 2 关键词 × 平均 50 char × 3 sample ≈ 4.5MB 文本 → **限制每个关键词 3 条 sample** 后降到 ~1.5MB. 可接受.
+```python
+# 沿用 load_network_data 的 years 参数, 保持一致
+context_index = build_context_index(eval_dir=results_root, years=[2022, 2023, 2024])
+# 注入到模板
+return HTML_TEMPLATE.render(
+    ...,
+    translate_map_json=json.dumps(KEYWORD_TRANSLATIONS, ensure_ascii=False),
+    context_index_json=json.dumps(context_index, ensure_ascii=False),
+    ...,
+)
+```
+
+**注入方式**: `<script>window.__hrContextIndex = {...};</script>` 放在 `<head>` ECharts CDN 之后, Alpine `<script defer>` 之前 (与 §7.1 锁定的注入顺序一致).
+
+**体积估算 (修订)**: 原始估算 "1.5MB" 未考虑 JSON wrapper 开销. 修正:
+- 3 年 × ~5000 行 × 2 关键词 × 50 char 原文 + ~100 字节 JSON wrapper = ~3MB raw
+- 加 sankey 索引 (~1MB) = 总 ~4MB (raw)
+- 加 3 sample 限制 + 压缩后注入 ~2.0-2.5MB (经 gzip 后)
+
+**风险**: 接近 3.5MB 验证上限. 实施时先 dry-run 测一次大小, 超过 3MB 则降到 2 sample; 仍超 1 sample; 最坏情况放弃 sankey 索引 (只保留 keywords, sankey 点击显示 "No context available").
 
 ## 9. 关键决策
 
@@ -485,11 +680,13 @@ def build_context_index(eval_dir, years):
 | 单元 (`test_translations.py`) | `translate_smart()` 4 case: 精确命中 / 纯 ASCII / 中文未命中 / 空字符串 | 4 test |
 | 单元 (`test_translations.py`) | 词典扩展条目存在性: dim 名 / cluster / UI 术语 / Sankey 阶段 | 1 parametrized test (~10 case) |
 | 单元 (`test_echarts.py`) | 4 个 builder 标题/副标题为英文 (含 "TCFD", "Drill", "Zoom" 等关键词) | 4 test |
-| 单元 (`test_echarts.py`) | `_t()` helper: 命中词典 / 纯 ASCII / `[[ZH: xxx]]` 包裹 | 3 test |
+| 单元 (`test_echarts.py`) | `_t()` helper: 命中词典 / 纯 ASCII / `[[ZH: xxx]]` 包裹 (含空字符串边界) | 4 test |
+| 单元 (`test_html_assembler.py`) | `build_context_index()` 自身: 关键词索引 dedup / 3-sample cap / sankey 边索引生成 | 3 test |
 | 单元 (`test_html_assembler.py`) | 注入 `window.__hrTranslate` 和 `window.__hrContextIndex` 到 HTML | 2 test |
 | 集成 (`test_html_assembler.py`) | `data-theme="dark"` 默认出现在 `<html>` 标签 | 1 test |
-| 集成 (`test_html_assembler.py`) | Inter 字体 `<link>` 出现在 `<head>` | 1 test |
-| 集成 (`test_html_assembler.py`) | Alpine.js `<script defer>` 出现在 `<head>` | 1 test |
+| 集成 (`test_html_assembler.py`) | Inter 字体 `<link>` 出现在 `<head>` (含 `display=swap`) | 1 test |
+| 集成 (`test_html_assembler.py`) | Alpine.js `<script defer>` 出现在 `<head>` (URL 含 `alpinejs@3.13`) | 1 test |
+| 集成 (`test_html_assembler.py`) | backdrop `<div>` 存在 + z-index 1000 在 `<aside>` style | 1 test |
 | 回归 | 现有 visualization 测试 (含 18 个 Stage 1 data_loader test) 全绿 | 全绿 |
 | 视觉 | 手动: 部署后浏览器打开, 检查 7 项 (见 §13) | 1 次手动 |
 
