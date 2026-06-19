@@ -1,32 +1,8 @@
 """Tests for static matplotlib charts."""
-import base64
-
 import matplotlib
 matplotlib.use("Agg")
 
-from tcfd_extractor.visualization.static_charts import (
-    build_refactor_bar,
-    build_module_graph_svg,
-)
-
-
-class TestBuildRefactorBar:
-    def test_returns_base64_string(self):
-        b64 = build_refactor_bar(
-            god_class_lines_before=468,
-            god_class_lines_after=79,
-            total_module_lines=1004,
-            module_count=10,
-            test_count_before=16,
-            test_count_after=165,
-        )
-        assert isinstance(b64, str)
-        assert len(b64) > 100
-
-    def test_decodes_to_png(self):
-        b64 = build_refactor_bar(468, 79, 1004, 10, 16, 165)
-        decoded = base64.b64decode(b64)
-        assert decoded[:8] == b"\x89PNG\r\n\x1a\n"
+from tcfd_extractor.visualization.static_charts import build_module_graph_svg
 
 
 class TestBuildModuleGraphSvg:
