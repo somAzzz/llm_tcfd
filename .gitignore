@@ -45,7 +45,7 @@ ENV/
 .secrets.toml
 
 # ============ 文档配置============
-doc/superpowers/
+doc/
 
 # ============ IDE / 编辑器 ============
 # VS Code
@@ -84,9 +84,16 @@ data/
 *.tar.gz
 
 # ============ 显式保留 ============
-# 反向声明：保留 doc/superpowers/ 下的设计文档与计划
-doc/superpowers/
-doc/superpowers/specs/
-doc/superpowers/specs/*.md
-doc/superpowers/plans/
-doc/superpowers/plans/*.md
+# 反向声明：保留 docs/ 下的所有设计文档、计划、分析与词袋数据
+docs/
+docs/superpowers/
+docs/superpowers/specs/
+docs/superpowers/specs/*.md
+docs/superpowers/plans/
+docs/superpowers/plans/*.md
+docs/analysis/
+docs/analysis/*
+docs/plan-archive/
+docs/plan-archive/*.md
+docs/word-bags/
+docs/word-bags/**/*
