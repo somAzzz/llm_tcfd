@@ -241,7 +241,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
         across three dimensions: <em>Policy</em>, <em>Market</em>, <em>Technology</em>.
       </p>
       <p>Three-dimensional clustering hierarchy (Sunburst) — click a node to drill down to keywords.</p>
-      <div id="echarts-sunburst" class="echarts-chart" style="width:100%; height:480px;"></div>
+      <div id="echarts-sunburst" class="echarts-chart" style="width:100%; height:520px;"></div>
     </section>
 
     <section>
@@ -281,15 +281,15 @@ flowchart LR
         Below: 25 years (2000-2024) of three-dimensional disclosure evolution (Streamgraph) —
         drag the bottom slider to zoom into a time range.
       </p>
-      <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:480px;"></div>
+      <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:520px;"></div>
 
       <h3 style="margin-top: 2rem;">Keyword Co-occurrence Network (Recent 3 Years)</h3>
       <p>Draggable nodes, hover to see co-occurrence count, click a node to view original context.</p>
-      <div id="echarts-network" class="echarts-chart" style="width:100%; height:560px;"></div>
+      <div id="echarts-network" class="echarts-chart" style="width:100%; height:600px;"></div>
 
       <h3 style="margin-top: 2rem;">NLP Pipeline Data Refinement (Sankey)</h3>
       <p>10,814 reports → chunking → disclosure → by dimension. Click a link to view context.</p>
-      <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:440px;"></div>
+      <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:480px;"></div>
     </section>
 
     <section>
