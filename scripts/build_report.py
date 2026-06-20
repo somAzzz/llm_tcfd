@@ -139,7 +139,7 @@ def main() -> int:
 
     readme = f"""# Climate Risk Intelligence from {stats.get('companies', '0')} Chinese Annual Reports
 
-**Live demo URL**: https://somAzzz.github.io/tcfd-report/
+**Live demo URL**: https://somazzz.github.io/tcfd-report/
 
 ## Project Snapshot
 

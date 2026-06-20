@@ -1,4 +1,4 @@
-"""Jinja2 HTML template for the HR report (Stage 2: dark + Inter + Alpine)."""
+"""Jinja2 HTML template for the public portfolio report."""
 from __future__ import annotations
 
 from jinja2 import Template
@@ -12,7 +12,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%231f77b4'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>T</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <script>
     // Stage 2: 翻译 map + context 索引 (由 html_assembler.py 渲染)
@@ -31,121 +31,218 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
   <style>
     :root[data-theme="dark"] {
-      --bg: #0f1419;
-      --fg: #e6e6e6;
-      --card-bg: #1a1f24;
-      --card-border: #2a2f34;
-      --muted: #8b95a1;
-      --accent: #58a6ff;
-      --accent-fg: #ffffff;
-      --header-bg: #101923;
-      --kpi-number-color: #58a6ff;
-      --aside-bg: #1a1f24;
-      --aside-border: #2a2f34;
-      --code-bg: #0d1117;
+      --bg: #111416;
+      --fg: #f2efe8;
+      --card-bg: #171b1d;
+      --card-border: #323a3b;
+      --muted: #a6aaa4;
+      --accent: #36d6b5;
+      --accent-2: #7fb7ff;
+      --accent-3: #e7b75f;
+      --accent-fg: #07100f;
+      --header-bg: #101315;
+      --kpi-number-color: #36d6b5;
+      --aside-bg: #171b1d;
+      --aside-border: #323a3b;
+      --code-bg: #0b0e10;
+      --paper: #efe7d7;
+      --paper-ink: #16191b;
+      --rule: rgba(242, 239, 232, 0.18);
+      --chart-frame: rgba(54, 214, 181, 0.1);
     }
     :root[data-theme="light"] {
-      --bg: #fafafa;
-      --fg: #222;
-      --card-bg: #ffffff;
-      --card-border: #e0e0e0;
-      --muted: #666;
-      --accent: #1f77b4;
+      --bg: #f5f1e7;
+      --fg: #151817;
+      --card-bg: #fffaf0;
+      --card-border: #d7cdbd;
+      --muted: #5f675f;
+      --accent: #087f6e;
+      --accent-2: #245ea8;
+      --accent-3: #9a6417;
       --accent-fg: #ffffff;
-      --header-bg: #f2f6fb;
-      --kpi-number-color: #1f77b4;
-      --aside-bg: #ffffff;
-      --aside-border: #e0e0e0;
-      --code-bg: #f5f5f5;
+      --header-bg: #ede5d6;
+      --kpi-number-color: #087f6e;
+      --aside-bg: #fffaf0;
+      --aside-border: #d7cdbd;
+      --code-bg: #ebe2d2;
+      --paper: #201f1a;
+      --paper-ink: #fffaf0;
+      --rule: rgba(21, 24, 23, 0.18);
+      --chart-frame: rgba(8, 127, 110, 0.1);
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; overflow-x: hidden; }
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--fg);
       margin: 0;
       padding: 0;
-      line-height: 1.5;
+      line-height: 1.55;
+      overflow-x: hidden;
     }
-    body, section, .kpi-card, header, .hr-side-panel, .callout {
+    body, section, .kpi-card, header, .hr-side-panel, .callout, .evidence-tape {
       transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
-    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    a { color: inherit; }
+    .container { max-width: 1180px; margin: 0 auto; padding: 1.25rem 1.25rem 2.5rem; }
     header {
       background: var(--header-bg);
       color: var(--fg);
-      padding: 3rem 1.5rem 2.25rem;
+      padding: 4.5rem 1.5rem 1.25rem;
       text-align: left;
       position: relative;
       border-bottom: 1px solid var(--card-border);
+      overflow: hidden;
     }
-    .hero-inner { max-width: 1100px; margin: 0 auto; }
+    header::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(54, 214, 181, 0.12) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(127, 183, 255, 0.08) 1px, transparent 1px);
+      background-size: 74px 74px;
+      mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+      opacity: 0.55;
+      pointer-events: none;
+    }
+    .hero-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      gap: 2.25rem;
+      align-items: end;
+      min-width: 0;
+    }
     .hero-kicker {
       color: var(--accent);
-      font-size: 0.78rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
       font-weight: 700;
       letter-spacing: 0;
       text-transform: uppercase;
-      margin: 0 0 0.75rem;
+      margin: 0 0 1rem;
     }
     header h1 {
-      margin: 0 0 0.75rem 0;
-      font-size: 2.45rem;
-      line-height: 1.08;
+      margin: 0 0 1rem 0;
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: clamp(2.55rem, 6vw, 5.95rem);
+      line-height: 0.9;
       font-weight: 700;
-      max-width: 860px;
+      max-width: 920px;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
     }
     header .subtitle {
       color: var(--muted);
-      font-size: 1.08rem;
+      font-size: 1.06rem;
       max-width: 760px;
       margin: 0;
     }
     .hero-finding {
-      margin-top: 1.25rem;
+      margin-top: 1.35rem;
       padding: 1rem 1.1rem;
       border-left: 4px solid var(--accent);
-      background: rgba(88, 166, 255, 0.08);
-      border-radius: 4px;
+      background: var(--chart-frame);
+      border-radius: 8px;
       max-width: 860px;
       color: var(--fg);
+    }
+    .hero-proof {
+      border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.025);
+      border-radius: 8px;
+      padding: 1rem;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+      min-width: 0;
+    }
+    .proof-label {
+      margin: 0 0 0.75rem;
+      color: var(--accent-3);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+    }
+    .evidence-tape {
+      display: grid;
+      gap: 0.65rem;
+    }
+    .tape-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.72rem 0.8rem;
+      background: var(--paper);
+      color: var(--paper-ink);
+      border-radius: 4px;
+      transform: rotate(var(--tilt, -0.5deg));
+    }
+    .tape-row:nth-child(2) { --tilt: 0.7deg; }
+    .tape-row:nth-child(3) { --tilt: -0.3deg; }
+    .tape-rank, .tape-count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tape-pair {
+      min-width: 0;
+      font-weight: 700;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .tape-translation {
+      display: block;
+      font-weight: 500;
+      opacity: 0.72;
+      font-size: 0.82rem;
+      margin-top: 0.18rem;
     }
     .hr-theme-toggle {
       position: absolute;
       top: 1rem;
       right: 1rem;
-      background: rgba(255,255,255,0.15);
-      border: 1px solid rgba(255,255,255,0.3);
-      color: white;
-      padding: 0.4rem 0.7rem;
-      border-radius: 4px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--fg);
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 999px;
       cursor: pointer;
       font-size: 1rem;
+      z-index: 2;
     }
     .kpi-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 1rem;
-      margin: 2rem 0;
+      margin: 1.4rem 0 1rem;
     }
     .kpi-card {
-      background: var(--card-bg);
+      background: transparent;
       border: 1px solid var(--card-border);
       border-radius: 8px;
-      padding: 1.25rem;
-      text-align: center;
+      padding: 1rem;
+      text-align: left;
     }
     .kpi-card .number {
-      font-size: 2.25rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(1.35rem, 2.3vw, 2rem);
       font-weight: 700;
       color: var(--kpi-number-color);
       margin: 0;
-      font-family: 'Inter', sans-serif;
+      line-height: 1;
     }
     .kpi-card .label {
-      font-size: 0.85rem;
+      font-size: 0.78rem;
       color: var(--muted);
-      margin-top: 0.5rem;
+      margin: 0.55rem 0 0;
+      text-transform: uppercase;
+      font-family: 'JetBrains Mono', monospace;
     }
     .insight-grid {
       display: grid;
@@ -154,21 +251,23 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       margin: 0 0 1.5rem;
     }
     .insight-card {
-      background: var(--card-bg);
+      background: rgba(255, 255, 255, 0.02);
       border: 1px solid var(--card-border);
       border-radius: 8px;
       padding: 1.1rem;
     }
     .insight-card .label {
       color: var(--muted);
-      font-size: 0.78rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
       font-weight: 700;
       text-transform: uppercase;
       margin: 0 0 0.45rem;
     }
     .insight-card .value {
       color: var(--accent);
-      font-size: 1.35rem;
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: 1.55rem;
       font-weight: 700;
       margin: 0 0 0.55rem;
     }
@@ -212,17 +311,51 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       font-size: 0.9rem;
     }
     section {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 1.5rem;
-      margin: 1.5rem 0;
+      background: transparent;
+      border-top: 1px solid var(--rule);
+      padding: 2.25rem 0;
+      margin: 0;
     }
     section h2 {
       margin: 0 0 1rem 0;
-      font-size: 1.4rem;
-      color: var(--accent);
-      font-weight: 600;
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: clamp(1.8rem, 3.5vw, 3.2rem);
+      line-height: 0.98;
+      color: var(--fg);
+      font-weight: 700;
+    }
+    section h3 {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: 1.55rem;
+      color: var(--fg);
+    }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1fr);
+      gap: 2rem;
+      align-items: start;
+      margin-bottom: 1.35rem;
+    }
+    .section-tag {
+      margin: 0 0 0.75rem;
+      color: var(--accent-3);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .lede {
+      color: var(--muted);
+      font-size: 1.05rem;
+      margin: 0;
+    }
+    .chart-frame {
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      padding: 0.75rem;
+      min-width: 0;
+      overflow: hidden;
     }
     .callout {
       background: var(--code-bg);
@@ -231,6 +364,25 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       margin: 1.5rem 0;
       border-radius: 4px;
     }
+    .flow-copy {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .method-note {
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .method-note h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1.1rem;
+      color: var(--accent);
+      font-family: 'IBM Plex Sans', sans-serif;
+    }
+    .method-note p { margin: 0; color: var(--muted); }
     .callout h3 {
       margin: 0 0 0.5rem 0;
       color: var(--accent);
@@ -299,23 +451,47 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     }
     .spec-card {
       background: rgba(255, 255, 255, 0.02);
-      border-left: 3px solid var(--accent, #56d364);
+      border-left: 3px solid var(--accent);
       border-radius: 4px;
       padding: 0.85rem 1rem;
     }
     .spec-card h3 {
       margin: 0 0 0.4rem 0;
       font-size: 1.05rem;
-      color: var(--accent, #56d364);
+      color: var(--accent);
     }
     .spec-card p {
       margin: 0;
       font-size: 0.9rem;
       line-height: 1.5;
-      color: var(--text-muted, #8b949e);
+      color: var(--muted);
+    }
+    .hr-side-panel { max-width: 100vw; }
+    .hr-side-panel button:focus-visible, .hr-theme-toggle:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
     }
     @media (max-width: 900px) {
       .engineering-layout-grid { grid-template-columns: 1fr; }
+      .hero-inner { grid-template-columns: 1fr; }
+      .section-head { grid-template-columns: 1fr; gap: 0.75rem; }
+      .flow-copy { grid-template-columns: 1fr; }
+      header { padding-top: 4rem; }
+    }
+    @media (max-width: 520px) {
+      .container { padding-inline: 0.9rem; }
+      .kpi-row { grid-template-columns: 1fr; }
+      header h1 { font-size: 2.45rem; }
+      .tape-row { grid-template-columns: 1fr; gap: 0.28rem; }
+      aside.hr-side-panel { width: 100vw !important; }
     }
   </style>
 </head>
@@ -344,15 +520,34 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 
   <header>
     <div class="hero-inner">
-      <p class="hero-kicker">Portfolio Project · NLP · Climate Finance · Data Engineering</p>
-      <h1>Climate Risk Intelligence from {{ report_stats.get("companies", "0") }} Chinese Annual Reports</h1>
-      <p class="subtitle">
-        A 25-year NLP system that extracts, evaluates, clusters, and visualizes
-        TCFD-related disclosure signals across policy, market, and technology dimensions.
-      </p>
-      <div class="hero-finding">
-        Key finding: climate-related disclosure in A-share annual reports accelerated sharply
-        after 2020, with policy compliance still dominant and technology-transition signals rising.
+      <div>
+        <p class="hero-kicker">Portfolio case file / NLP / Climate finance / Local LLM</p>
+        <h1>Climate risk signals hidden in 10,814 annual reports</h1>
+        <p class="subtitle">
+          A reproducible NLP pipeline that turns Chinese A-share annual reports into
+          evidence-backed TCFD disclosure intelligence across policy, market, and
+          technology dimensions.
+        </p>
+        <div class="hero-finding">
+          Finding: climate disclosure accelerates sharply after 2020. Policy and
+          compliance language remains the dominant signal, while transition technology
+          terms become increasingly visible in recent filings.
+        </div>
+      </div>
+      <div class="hero-proof" aria-label="Top evidence highlights">
+        <p class="proof-label">Evidence extracted from annual-report language</p>
+        <div class="evidence-tape">
+          {% for item in top_pairs[:3] %}
+          <div class="tape-row">
+            <span class="tape-rank">#{{ loop.index }}</span>
+            <span class="tape-pair">
+              {{ item.pair }}
+              <span class="tape-translation">{{ item.translated }}</span>
+            </span>
+            <span class="tape-count">{{ item.count }}</span>
+          </div>
+          {% endfor %}
+        </div>
       </div>
     </div>
   </header>
@@ -378,12 +573,17 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     </div>
 
     <section>
-      <h2>1. Climate disclosure signals at scale</h2>
-      <p>
-        This project turns annual-report text into a structured map of climate-risk language.
-        It combines local LLM extraction, co-occurrence analysis, TCFD relevance evaluation,
-        semantic clustering, and a public-safe interactive report.
-      </p>
+      <div class="section-head">
+        <div>
+          <p class="section-tag">01 / Result</p>
+          <h2>From filings to climate-risk evidence</h2>
+        </div>
+        <p class="lede">
+          The project turns annual-report text into a structured map of climate-risk
+          language. It combines local LLM extraction, co-occurrence analysis, TCFD
+          relevance evaluation, semantic clustering, and a public-safe interactive report.
+        </p>
+      </div>
       <div class="insight-grid">
         {% for insight in insights %}
         <article class="insight-card">
@@ -393,22 +593,29 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
         </article>
         {% endfor %}
       </div>
-      <p>
+      <p class="lede">
         The sunburst below shows the vocabulary hierarchy: TCFD dimension →
         semantic cluster → individual keyword. It is a compact view of the
         topic space discovered by the pipeline.
       </p>
-      <div id="echarts-sunburst" class="echarts-chart" style="width:100%; height:520px;"></div>
+      <div class="chart-frame">
+        <div id="echarts-sunburst" class="echarts-chart" style="width:100%; height:520px;"></div>
+      </div>
     </section>
 
     <section>
-      <h2>2. What we built</h2>
-      <p>
-        An end-to-end <strong>NLP pipeline</strong> that takes raw annual-report text
-        through sampling, chunking, LLM-based keyword extraction, co-occurrence analysis,
-        TCFD evaluation, and clustering.
-      </p>
-      <div class="mermaid">
+      <div class="section-head">
+        <div>
+          <p class="section-tag">02 / System</p>
+          <h2>A pipeline built for noisy disclosure text</h2>
+        </div>
+        <p class="lede">
+          Raw annual-report text moves through sampling, chunking, local LLM keyword
+          extraction, co-occurrence analysis, TCFD scoring, and topic clustering.
+          The public report is the final artifact, not a hand-made dashboard.
+        </p>
+      </div>
+      <div class="chart-frame mermaid">
 flowchart LR
     A[1. Sample Reports] --> B[2. Split into Chunks]
     B --> C[3. Extract Keywords with LLM]
@@ -416,35 +623,40 @@ flowchart LR
     D --> E[5. Score on Policy/Market/Technology]
     E --> F[6. Cluster Similar Topics]
       </div>
-      <div class="callout">
-        <h3>Beyond TCFD: Reusable Architecture</h3>
-        <p>
-          The patterns demonstrated here — multi-dimensional routing, structured LLM outputs,
-          concurrent batch processing with retry — are domain-agnostic. The same architecture
-          applies to:
-        </p>
-        <ul>
-          <li><strong>Multilingual content classification</strong> at scale</li>
-          <li><strong>Concurrent pipeline</strong> of LLM evaluations with rate limiting</li>
-          <li><strong>Structured outputs from open-source models</strong> for downstream analytics</li>
-        </ul>
-        <p><em>Same engineering. New domain.</em></p>
+      <div class="flow-copy">
+        <article class="method-note">
+          <h3>Reusable pattern</h3>
+          <p>Multi-dimensional routing, structured LLM outputs, concurrent batch processing,
+             retry handling, and downstream analytics can transfer to other document-heavy domains.</p>
+        </article>
+        <article class="method-note">
+          <h3>Public-safe output</h3>
+          <p>Company names are anonymized, chart data is embedded into a single HTML file,
+             and a leakage scanner runs before publication.</p>
+        </article>
       </div>
     </section>
 
     <section>
-      <h2>3. What the data shows</h2>
-      <p>
-        The strongest story is temporal: climate-related disclosures were sparse in
-        the early 2000s and surged in the 2020s. The streamgraph lets you compare
-        how policy, market, and technology signals evolved over time.
-      </p>
-      <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:520px;"></div>
+      <div class="section-head">
+        <div>
+          <p class="section-tag">03 / Findings</p>
+          <h2>The signal is temporal, then linguistic</h2>
+        </div>
+        <p class="lede">
+          The strongest story is time: climate-related disclosures were sparse in
+          the early 2000s and surged in the 2020s. The streamgraph lets you compare
+          how policy, market, and technology language evolved.
+        </p>
+      </div>
+      <div class="chart-frame">
+        <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:520px;"></div>
+      </div>
 
-      <h3 style="margin-top: 2rem;">Keyword Co-occurrence Network (Recent 3 Years)</h3>
-      <p>
-        The most frequent co-occurrences reveal the language behind the trend.
-        Compliance pressure, energy reduction, and transition technology dominate
+      <h3 style="margin-top: 2rem;">Recent language graph</h3>
+      <p class="lede">
+        The most frequent co-occurrences reveal the vocabulary behind the trend:
+        compliance pressure, energy reduction, and transition technology dominate
         the recent disclosure graph.
       </p>
       <div class="evidence-list">
@@ -457,40 +669,51 @@ flowchart LR
         </article>
         {% endfor %}
       </div>
-      <p>Explore the network directly: drag nodes, hover for counts, and click a node to inspect source context samples.</p>
-      <div id="echarts-network" class="echarts-chart" style="width:100%; height:600px;"></div>
+      <p>Drag nodes, hover for counts, and click a node to inspect source context samples.</p>
+      <div class="chart-frame">
+        <div id="echarts-network" class="echarts-chart" style="width:100%; height:600px;"></div>
+      </div>
 
-      <h3 style="margin-top: 2rem;">NLP Pipeline Data Refinement (Sankey)</h3>
-      <p>{{ report_stats.get("companies", "0") }} reports → chunking → disclosure → by dimension. Click a link to view context.</p>
-      <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:480px;"></div>
+      <h3 style="margin-top: 2rem;">Pipeline refinement</h3>
+      <p>{{ report_stats.get("companies", "0") }} reports → chunks → disclosures → dimensions. Click a link to view source contexts.</p>
+      <div class="chart-frame">
+        <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:480px;"></div>
+      </div>
     </section>
 
     <section class="engineering-excellence">
-      <h2>4. Robust AI Pipeline Engineering</h2>
-      <p class="subtitle">How the project turns noisy LLM output into reproducible analysis artifacts.</p>
+      <div class="section-head">
+        <div>
+          <p class="section-tag">04 / Engineering</p>
+          <h2>Turning stochastic LLM output into a repeatable artifact</h2>
+        </div>
+        <p class="lede">The project is designed as an engineering system, not a one-off notebook.</p>
+      </div>
 
       <div class="engineering-layout-grid">
-        <div id="echarts-pipeline-health-dashboard"
-             class="echarts-chart"
-             style="width:100%; height:380px;"></div>
+        <div class="chart-frame">
+          <div id="echarts-pipeline-health-dashboard"
+               class="echarts-chart"
+               style="width:100%; height:380px;"></div>
+        </div>
 
         <div class="engineering-specs">
           <div class="spec-card">
-            <h3>&#x1F6E1;&#xFE0F; Stochastic-to-Deterministic Defense</h3>
+            <h3>Structured validation</h3>
             <p>A local 35B model can return malformed JSON or partial schema
                matches. The evaluator wraps every response in Pydantic validation,
                explicit parse exceptions, raw-response logging, and retry-aware
                batch execution.</p>
           </div>
           <div class="spec-card">
-            <h3>&#x26A1;&#xFE0F; Memory-Safe Streaming &amp; Concurrency</h3>
+            <h3>Streaming and concurrency</h3>
             <p>Large JSONL outputs are loaded and aggregated with streaming
                readers. Concurrent evaluation is handled with
                <code>ThreadPoolExecutor</code>, bounded workers, and resumable
                per-year output files.</p>
           </div>
           <div class="spec-card">
-            <h3>&#x1F52C; Comprehensive Observability</h3>
+            <h3>Publication checks</h3>
             <p>The current suite has <strong>{{ report_stats.get("test_count", "0") }} automated tests</strong>.
                The public report is rebuilt from source data and checked with a
                leakage scanner before publication.</p>
@@ -501,11 +724,13 @@ flowchart LR
       <div x-show="$store.pipelineUi.showDeepDive" x-transition.opacity.duration.300ms
            style="margin-top: 1rem;">
         <h3 style="margin-top: 1rem; color: var(--accent);">
-          &#x1F9E9; Module Dependency Graph (click any bar to collapse)
+          Module dependency graph
         </h3>
         <p>Hover a module to highlight its import dependencies.</p>
-        <div id="echarts-module-graph" class="echarts-chart"
-             style="width:100%; height:480px;"></div>
+        <div class="chart-frame">
+          <div id="echarts-module-graph" class="echarts-chart"
+               style="width:100%; height:480px;"></div>
+        </div>
       </div>
     </section>
 

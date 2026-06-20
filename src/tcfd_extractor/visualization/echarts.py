@@ -81,20 +81,20 @@ TCFD_THEME_CONFIG: dict[str, Any] = {
         # Stage 4 round 3 调亮: dim 层半径占比 5%→12% 后, 这 3 色作为最内圈
         # 直接对眼睛, 需要比 cluster 环 (alpha=0.4) 和外圈 (深蓝) 都更亮更饱和
         # 用户反馈: "最内层的 tech, policy, market 颜色有点暗"
-        "policy": "#79c0ff",   # Stage 4 r3: #58a6ff → #79c0ff (更亮的天蓝)
-        "market": "#ffa657",   # Stage 4 r3: #f0883e → #ffa657 (更亮的琥珀)
-        "tech":   "#7ee787",   # Stage 4 r3: #56d364 → #7ee787 (更亮的嫩绿)
-        "neutral": ["#8b95a1", "#6c757d", "#484f58"],
+        "policy": "#7fb7ff",
+        "market": "#e7b75f",
+        "tech":   "#36d6b5",
+        "neutral": ["#a6aaa4", "#6f7773", "#3c4442"],
     },
     # Stage 3 修复: chart canvas 透明, 与 dark page bg (#0f1419) 融合
     "chart_background": "transparent",
-    "font": "Inter, 'Helvetica Neue', -apple-system, sans-serif",
-    "text_style": {"fontFamily": "Inter", "color": "#e6e6e6"},  # 暗色默认
+    "font": "'IBM Plex Sans', 'Helvetica Neue', -apple-system, sans-serif",
+    "text_style": {"fontFamily": "IBM Plex Sans", "color": "#f2efe8"},
     "tooltip_style": {
-        "backgroundColor": "rgba(20,20,20,0.95)",
+        "backgroundColor": "rgba(17,20,22,0.96)",
         "borderWidth": 1,
-        "borderColor": "rgba(255,255,255,0.1)",
-        "textStyle": {"color": "#fff", "fontSize": 12, "fontFamily": "Inter"},
+        "borderColor": "rgba(54,214,181,0.28)",
+        "textStyle": {"color": "#f2efe8", "fontSize": 12, "fontFamily": "IBM Plex Sans"},
     },
     "global_roam": True,
     "animation": True,
@@ -254,7 +254,7 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
                  # itemStyle.color 决定 (父辈 dim 色 alpha=0.4 rgba), ECharts
                  # 优先 per-node, 这里留空避免覆盖
             {  # 3: keyword (最外圈) - 深蓝色 + 边框 + 悬停发光
-                "itemStyle": {"color": "#0a1929", "borderColor": "#1f3a5a",
+                "itemStyle": {"color": "#102326", "borderColor": "#1d4d4b",
                               "borderWidth": 1},
                 # 悬停时发淡白光抵抗炭黑背景, 同时自动高亮 ancestor 链
                 "emphasis": {

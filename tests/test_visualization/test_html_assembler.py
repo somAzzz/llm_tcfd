@@ -77,10 +77,10 @@ class TestAssembleHtml:
             module_graph_svg="<svg></svg>",
         )
         assert "Climate Risk Intelligence" in html
-        assert "Climate disclosure signals at scale" in html
-        assert "What we built" in html
-        assert "What the data shows" in html
-        assert "Robust AI Pipeline Engineering" in html
+        assert "From filings to climate-risk evidence" in html
+        assert "A pipeline built for noisy disclosure text" in html
+        assert "The signal is temporal, then linguistic" in html
+        assert "Turning stochastic LLM output into a repeatable artifact" in html
 
     def test_portfolio_insight_cards_included(self, tmp_path):
         results = _make_min_results(tmp_path)
@@ -88,7 +88,8 @@ class TestAssembleHtml:
             results_root=results,
             module_graph_svg="<svg></svg>",
         )
-        assert "Portfolio Project" in html
+        assert "Portfolio case file" in html
+        assert "Evidence extracted from annual-report language" in html
         assert "Disclosure acceleration" in html
         assert "Policy-led signal" in html
         assert "Engineering proof" in html
@@ -139,8 +140,8 @@ class TestAssembleHtml:
             results_root=results,
             module_graph_svg="<svg></svg>",
         )
-        assert "Beyond TCFD" in html
-        assert "Reusable Architecture" in html
+        assert "Reusable pattern" in html
+        assert "Public-safe output" in html
 
     def test_module_graph_inlined(self, tmp_path):
         results = _make_min_results(tmp_path)
@@ -149,7 +150,7 @@ class TestAssembleHtml:
             module_graph_svg="",
         )
         assert "echarts-module-graph" in html
-        assert "Module Dependency Graph" in html
+        assert "Module dependency graph" in html
 
     def test_pipeline_health_chart_inlined(self, tmp_path):
         results = _make_min_results(tmp_path)
@@ -158,9 +159,9 @@ class TestAssembleHtml:
             module_graph_svg="<svg></svg>",
         )
         assert "echarts-pipeline-health-dashboard" in html
-        assert "Stochastic-to-Deterministic Defense" in html
-        assert "Memory-Safe Streaming" in html
-        assert "Comprehensive Observability" in html
+        assert "Structured validation" in html
+        assert "Streaming and concurrency" in html
+        assert "Publication checks" in html
         assert "pipelineHealthDashboard" in html
 
 
@@ -301,14 +302,16 @@ class TestStage2TemplateContent:
         )
         assert 'data-theme="dark"' in html
 
-    def test_html_has_inter_font_link(self, tmp_path):
-        """Inter Google Fonts <link> 出现, 含 display=swap。"""
+    def test_html_has_portfolio_font_links(self, tmp_path):
+        """Portfolio font system appears with display=swap."""
         results = _make_min_results(tmp_path)
         html = assemble_html(
             results_root=results,
             module_graph_svg="<svg></svg>",
         )
-        assert "Inter:wght" in html
+        assert "Fraunces" in html
+        assert "IBM+Plex+Sans" in html
+        assert "JetBrains+Mono" in html
         assert "display=swap" in html
 
     def test_html_has_alpine_defer_script(self, tmp_path):
