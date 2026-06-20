@@ -623,16 +623,32 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       font-family: 'IBM Plex Sans', sans-serif;
       font-size: 1.05rem;
     }
-    .rebuild-card pre {
-      margin: 0;
-      padding: 0.85rem;
+    .pipeline-path {
+      display: grid;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .pipeline-path span {
+      display: block;
+      padding: 0.62rem 0.72rem;
+      border: 1px solid var(--rule);
       border-radius: 6px;
       background: var(--code-bg);
       color: var(--fg);
-      overflow-x: auto;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.78rem;
-      line-height: 1.55;
+      font-size: 0.76rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .pipeline-path span:last-child {
+      border-color: rgba(54, 214, 181, 0.45);
+      color: var(--accent);
+    }
+    .rebuild-card .detail {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
     }
     .module-action-card p {
       margin: 0 0 0.85rem;
@@ -692,7 +708,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       .kpi-row { grid-template-columns: 1fr; }
       header h1 { font-size: 2.45rem; }
       .tape-row { grid-template-columns: 1fr; gap: 0.28rem; }
-      .rebuild-card pre { font-size: 0.72rem; }
+      .pipeline-path span { font-size: 0.7rem; }
       aside.hr-side-panel { width: 100vw !important; }
     }
   </style>
@@ -1006,10 +1022,18 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 
       <div class="engineering-proof-strip">
         <article class="rebuild-card">
-          <h3>Rebuild path</h3>
-          <pre><code>uv run pytest
-uv run python scripts/build_report.py
-uv run python scripts/check_leakage.py output/report/index.html</code></pre>
+          <h3>Pipeline reproducibility</h3>
+          <p class="detail">
+            llm_tcfd is the extraction, co-occurrence, LLM evaluation,
+            validation, and aggregation pipeline. The visualization is the
+            final publication layer.
+          </p>
+          <div class="pipeline-path" aria-label="llm_tcfd project execution path">
+            <span>Annual filings → cleaned text</span>
+            <span>Keyword extraction → co-occurrence contexts</span>
+            <span>Local LLM scoring → Pydantic validation</span>
+            <span>Aggregated evidence → portfolio visualization</span>
+          </div>
         </article>
         <article class="module-action-card">
           <h3>System boundary</h3>
