@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from .translations import KEYWORD_TRANSLATIONS, translate
+from .translations import KEYWORD_TRANSLATIONS, translate, translate_chart_label
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ def _chart_translate(s: str) -> str:
     """
     if not s:
         return s
-    return KEYWORD_TRANSLATIONS.get(s, s)
+    return translate_chart_label(s)
 
 
 def load_sunburst_data(clusters_dir: Path, theme: dict | None = None) -> list[dict]:
@@ -197,8 +197,7 @@ def load_sunburst_data(clusters_dir: Path, theme: dict | None = None) -> list[di
             raw_label = cluster.get("math_label", "")
             cluster_id = cluster.get("cluster_id", "?")
             translated = _chart_translate(raw_label)
-            # _chart_translate 返回原值时还是中文, fallback 到 Cluster {id}
-            if not translated or any('\u4e00' <= c <= '\u9fff' for c in translated):
+            if not translated:
                 cluster_name = f"Cluster {cluster_id}"
             else:
                 cluster_name = translated
@@ -321,18 +320,30 @@ def load_network_data(eval_dir: Path, years: list[int],
                 seen.add(kw)
             node_freq[kw] += 1
             node_dim[kw] = edge_dim.get((a, b), "无")
+    label_by_kw: dict[str, str] = {}
+    label_seen: Counter = Counter()
+    for kw in seen:
+        base_label = translate_chart_label(kw)
+        label_seen[base_label] += 1
+        label_by_kw[kw] = (
+            base_label if label_seen[base_label] == 1
+            else f"{base_label} {label_seen[base_label]}"
+        )
     # 节点列表
     nodes = []
     for kw in seen:
         size = max(10, min(60, 10 + node_freq[kw] * 0.5))
         nodes.append({
-            "id": kw, "name": kw,
+            "id": label_by_kw[kw], "name": label_by_kw[kw],
             "symbolSize": size,
             "category": translate(node_dim.get(kw, "无")),
             "value": node_freq[kw],
         })
     # 边列表
-    links = [{"source": a, "target": b, "weight": w} for (a, b), w in edges]
+    links = [
+        {"source": label_by_kw[a], "target": label_by_kw[b], "weight": w}
+        for (a, b), w in edges
+    ]
     return {"nodes": nodes, "links": links}
 
 

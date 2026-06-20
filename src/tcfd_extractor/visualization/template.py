@@ -15,7 +15,6 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <script>
-    // Stage 2: 翻译 map + context 索引 (由 html_assembler.py 渲染)
     window.__hrTranslateMap = {{ translate_map_json|safe }};
     window.__hrContextIndex = {{ context_index_json|safe }};
     window.__hrTranslate = function(kw) {
@@ -370,6 +369,66 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       gap: 1rem;
       margin-top: 1rem;
     }
+    .pipeline-board {
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      background:
+        linear-gradient(90deg, rgba(54, 214, 181, 0.14), transparent 34%),
+        var(--card-bg);
+      padding: 1rem;
+      overflow: hidden;
+    }
+    .pipeline-track {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(130px, 1fr));
+      gap: 0.65rem;
+      align-items: stretch;
+    }
+    .pipeline-stage {
+      position: relative;
+      min-height: 150px;
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      padding: 0.95rem;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .pipeline-stage::after {
+      content: "";
+      position: absolute;
+      right: -0.68rem;
+      top: 50%;
+      width: 0.7rem;
+      height: 1px;
+      background: var(--accent);
+      opacity: 0.75;
+    }
+    .pipeline-stage:last-child::after { display: none; }
+    .pipeline-step {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.7rem;
+      height: 1.7rem;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-fg);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-bottom: 0.8rem;
+    }
+    .pipeline-stage h3 {
+      margin: 0 0 0.45rem;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 1rem;
+      color: var(--fg);
+    }
+    .pipeline-stage p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
     .method-note {
       border: 1px solid var(--card-border);
       border-radius: 8px;
@@ -484,6 +543,17 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       .hero-inner { grid-template-columns: 1fr; }
       .section-head { grid-template-columns: 1fr; gap: 0.75rem; }
       .flow-copy { grid-template-columns: 1fr; }
+      .pipeline-track {
+        grid-template-columns: 1fr;
+      }
+      .pipeline-stage::after {
+        right: auto;
+        left: 1.8rem;
+        top: auto;
+        bottom: -0.68rem;
+        width: 1px;
+        height: 0.7rem;
+      }
       header { padding-top: 4rem; }
     }
     @media (max-width: 520px) {
@@ -615,13 +685,39 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
           The public report is the final artifact, not a hand-made dashboard.
         </p>
       </div>
-      <div class="chart-frame mermaid">
-flowchart LR
-    A[1. Sample Reports] --> B[2. Split into Chunks]
-    B --> C[3. Extract Keywords with LLM]
-    C --> D[4. Find Co-occurring Pairs]
-    D --> E[5. Score on Policy/Market/Technology]
-    E --> F[6. Cluster Similar Topics]
+      <div class="pipeline-board" aria-label="NLP pipeline stages">
+        <div class="pipeline-track">
+          <article class="pipeline-stage">
+            <span class="pipeline-step">01</span>
+            <h3>Sample reports</h3>
+            <p>Load annual-report files and keep year-level provenance.</p>
+          </article>
+          <article class="pipeline-stage">
+            <span class="pipeline-step">02</span>
+            <h3>Split text</h3>
+            <p>Convert long filings into bounded analysis chunks.</p>
+          </article>
+          <article class="pipeline-stage">
+            <span class="pipeline-step">03</span>
+            <h3>Extract terms</h3>
+            <p>Use a local LLM to identify climate-related terms.</p>
+          </article>
+          <article class="pipeline-stage">
+            <span class="pipeline-step">04</span>
+            <h3>Build pairs</h3>
+            <p>Count co-occurring terms that describe the same disclosure signal.</p>
+          </article>
+          <article class="pipeline-stage">
+            <span class="pipeline-step">05</span>
+            <h3>Score TCFD fit</h3>
+            <p>Route evidence into policy, market, and technology dimensions.</p>
+          </article>
+          <article class="pipeline-stage">
+            <span class="pipeline-step">06</span>
+            <h3>Cluster topics</h3>
+            <p>Aggregate similar language into readable chart structures.</p>
+          </article>
+        </div>
       </div>
       <div class="flow-copy">
         <article class="method-note">
@@ -739,7 +835,7 @@ flowchart LR
     </footer>
   </div>
 
-  <!-- Side panel: backdrop + aside (Alpine 侧栏) -->
+  <!-- Side panel: backdrop + aside -->
   <div x-show="$store.hrApp.panel"
        x-transition.opacity.duration.200ms
        @click="$store.hrApp.closePanel()"
@@ -791,11 +887,7 @@ flowchart LR
     </div>
   </aside>
 
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
   <script>
-    mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });
-
-    // Stage 2: ECharts 4 图表统一管理 (dispose + reinit 主题切换)
     window.__hrCharts = {};
     window.__hrOpts = {
       sunburst:    {{ sunburst_json|safe }},
@@ -842,9 +934,6 @@ flowchart LR
             contexts: contexts,
           });
         } else if (chartId === 'echarts-sankey' && params.dataType === 'edge') {
-          // Stage 3.2 修复: 节点名是 clean English ("Reports 2023" 等),
-          // 不再用 stage{N}_ prefix (旧 prefix 触发了 formatter → ECharts 把
-          // JS 源码当 template 渲染)。所以这里也不再需要 stripPrefix。
           const source = params.data.source;
           const target = params.data.target;
           const edgeKey = `${source}->${target}`;
@@ -855,7 +944,6 @@ flowchart LR
             contexts: contexts,
           });
         }
-        // 其它点击 (axisLabel / legend / 空白) → 不响应, panel 保持
       });
     }
 
@@ -887,11 +975,10 @@ flowchart LR
       const el = document.getElementById('echarts-pipeline-health-dashboard');
       if (!el || !window.__hrCharts['echarts-pipeline-health-dashboard']) return;
       const chart = window.__hrCharts['echarts-pipeline-health-dashboard'];
-      chart.off('click');   // prevent duplicate handlers on rebuildAllCharts()
+      chart.off('click');
       chart.on('click', function () { window.__hrToggleDeepDive(); });
     }
 
-    // Toggle the hidden Module Dependency Graph on any bar click.
     window.__hrToggleDeepDive = function () {
       if (!window.Alpine) return;
       const s = Alpine.store('pipelineUi');

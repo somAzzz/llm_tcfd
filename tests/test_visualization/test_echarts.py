@@ -155,11 +155,10 @@ class TestTranslateHelper:
         assert _t("ESG") == "ESG"
         assert _t("TCFD") == "TCFD"
 
-    def test_unknown_chinese_wrapped_double_brackets(self):
+    def test_unknown_chinese_gets_public_english_fallback(self):
         result = _t("某未知词")
-        assert result == "[[ZH: 某未知词]]"
-        assert result.startswith("[[ZH:")
-        assert result.endswith("]]")
+        assert result.startswith("Climate Disclosure Term ")
+        assert _has_no_cjk(result)
 
     def test_empty_string_returns_empty(self):
         assert _t("") == ""

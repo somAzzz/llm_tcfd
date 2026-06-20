@@ -28,7 +28,7 @@ from .echarts import (
     encode_echarts_option,
 )
 from .template import HTML_TEMPLATE
-from .translations import KEYWORD_TRANSLATIONS, translate_smart
+from .translations import KEYWORD_TRANSLATIONS, translate_chart_label, translate_smart
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +144,8 @@ def build_top_keyword_pairs(results: list[dict], limit: int = 5) -> list[dict]:
         pair_counts[tuple(sorted([a, b]))] += 1
     return [
         {
-            "pair": f"{a} / {b}",
-            "translated": f"{translate_smart(a)} / {translate_smart(b)}",
+            "pair": f"{translate_chart_label(a)} / {translate_chart_label(b)}",
+            "translated": "Top co-occurring disclosure terms",
             "count": _fmt_int(count),
         }
         for (a, b), count in pair_counts.most_common(limit)
@@ -194,22 +194,26 @@ def build_context_index(eval_dir: Path, years: list[int]) -> dict:
                 if not ctx:
                     continue
                 entry = {
-                    "id": f"{year}-{r.get('file', '')}-{line_no}",
-                    "original": ctx,
-                    "translated": translate_smart(ctx),
-                    "source": r.get("file", "").split("/")[-1],
+                    "id": f"{year}-sample-{line_no}",
+                    "original": "Original Chinese annual-report excerpt withheld in this public English view.",
+                    "translated": (
+                        f"Evidence sample from {year}: "
+                        f"{translate_chart_label(r.get('keyword_a', ''))} / "
+                        f"{translate_chart_label(r.get('keyword_b', ''))}."
+                    ),
+                    "source": "Anonymized annual report",
                     "year": year,
-                    "dimension": r.get("dimension", ""),
+                    "dimension": translate_chart_label(r.get("dimension", "")),
                 }
                 # 关键词索引 (供 network 节点 click)
                 for kw in (r.get("keyword_a", ""), r.get("keyword_b", "")):
                     if kw:
-                        index["keywords"].setdefault(kw, []).append(entry)
+                        index["keywords"].setdefault(translate_chart_label(kw), []).append(entry)
                 # Sankey 边索引 (供 sankey 流道 click)
                 ka = r.get("keyword_a", "")
                 kb = r.get("keyword_b", "")
                 if ka and kb:
-                    pair = sorted([ka, kb])
+                    pair = sorted([translate_chart_label(ka), translate_chart_label(kb)])
                     edge_key = f"{pair[0]}->{pair[1]}"
                     index["sankey"].setdefault(edge_key, []).append(entry)
                 # Pipeline Sankey edges use stage labels, not keyword labels.
@@ -310,7 +314,7 @@ def build_report_data_bundle(
         module_graph_json=encode_echarts_option(
             module_graph_opt, default=_dataclass_default,
         ),
-        translate_map_json=_json.dumps(KEYWORD_TRANSLATIONS, ensure_ascii=False),
+        translate_map_json="{}",
         context_index_json=_json.dumps(context_index, ensure_ascii=False),
         report_stats=_build_report_stats(eval_dir, refactor_stats, all_results),
         insights=build_portfolio_insights(all_results),

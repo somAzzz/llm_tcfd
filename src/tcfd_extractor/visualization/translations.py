@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import re
+import json
+import hashlib
+from pathlib import Path
 
 KEYWORD_TRANSLATIONS: dict[str, str] = {
     "气候变化": "Climate Change",
@@ -286,11 +289,17 @@ KEYWORD_TRANSLATIONS: dict[str, str] = {
     "绿色技术": "Green Technology",
 }
 
+_GENERATED_TRANSLATIONS_PATH = Path(__file__).with_name("llm_translations.json")
+if _GENERATED_TRANSLATIONS_PATH.exists():
+    KEYWORD_TRANSLATIONS.update(
+        json.loads(_GENERATED_TRANSLATIONS_PATH.read_text(encoding="utf-8"))
+    )
+
 
 def translate(keyword_zh: str) -> str:
     if keyword_zh in KEYWORD_TRANSLATIONS:
         return KEYWORD_TRANSLATIONS[keyword_zh]
-    return f"[[ZH: {keyword_zh}]]"  # 双中括号, 与 translate_smart 统一
+    return ascii_fallback(keyword_zh)
 
 
 def is_translated(keyword_zh: str) -> bool:
@@ -302,6 +311,24 @@ def missing_translations_for(keywords: list[str]) -> list[str]:
 
 
 _NON_ALNUM_RE = re.compile(r"[^\w\s]+", re.UNICODE)
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+_ASCII_LABEL_RE = re.compile(r"[^A-Za-z0-9+&/ .-]+")
+
+
+def has_cjk(value: str) -> bool:
+    return bool(_CJK_RE.search(value or ""))
+
+
+def ascii_fallback(value: str) -> str:
+    """Return a stable English-only label for any untranslated chart term."""
+    if not value:
+        return value
+    ascii_part = _ASCII_LABEL_RE.sub(" ", value).strip()
+    ascii_part = re.sub(r"\s+", " ", ascii_part)
+    if len(ascii_part) >= 2 and re.search(r"[A-Za-z]{2,}", ascii_part):
+        return ascii_part.title()
+    digest = hashlib.sha1(value.encode("utf-8")).hexdigest()[:6].upper()
+    return f"Climate Disclosure Term {digest}"
 
 
 def translate_smart(keyword: str) -> str:
@@ -320,5 +347,13 @@ def translate_smart(keyword: str) -> str:
         return keyword
     cleaned = _NON_ALNUM_RE.sub("", keyword).strip()
     if not cleaned:
-        return keyword
-    return f"[[ZH: {cleaned}]]"
+        return ascii_fallback(keyword)
+    return ascii_fallback(cleaned)
+
+
+def translate_chart_label(label: str) -> str:
+    """Translate chart-facing labels and guarantee no Chinese characters."""
+    translated = translate_smart(label)
+    if has_cjk(translated):
+        return ascii_fallback(label)
+    return translated

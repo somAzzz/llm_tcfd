@@ -101,8 +101,9 @@ class TestAssembleHtml:
             module_graph_svg="<svg></svg>",
         )
         assert "evidence-list" in html
-        assert "低碳 / 碳交易" in html
         assert "Low-Carbon / Carbon Trading" in html
+        assert "低碳" not in html
+        assert "碳交易" not in html
 
     def test_charts_json_inlined(self, tmp_path):
         results = _make_min_results(tmp_path)
@@ -199,21 +200,17 @@ class TestBuildContextIndex:
         from tcfd_extractor.visualization.html_assembler import build_context_index
         results = self._make_results(tmp_path)
         index = build_context_index(eval_dir=results, years=[2023])
-        # 碳交易/低碳 4 条 → cap 到 3
-        assert len(index["keywords"]["碳交易"]) == 3
-        assert len(index["keywords"]["低碳"]) == 3
+        assert len(index["keywords"]["Carbon Trading"]) == 3
+        assert len(index["keywords"]["Low-Carbon"]) == 3
 
     def test_sankey_index_uses_sorted_edge_key(self, tmp_path):
         from tcfd_extractor.visualization.html_assembler import build_context_index
         results = self._make_results(tmp_path)
         index = build_context_index(eval_dir=results, years=[2023])
-        # sankey 边 key: 排序后的 a->b
-        # 注: sorted(["碳交易", "低碳"]) == ["低碳", "碳交易"] 因为 "低"(U+4F4E) < "碳"(U+78B3)
-        assert "低碳->碳交易" in index["sankey"]
-        assert "碳交易->低碳" not in index["sankey"]  # 只存正序
-        # 第二组: 环保 ↔ 碳市场
-        assert "环保->碳市场" in index["sankey"]
-        assert "碳市场->环保" not in index["sankey"]
+        assert "Carbon Trading->Low-Carbon" in index["sankey"]
+        assert "Low-Carbon->Carbon Trading" not in index["sankey"]
+        assert "Carbon Market->Environmental Protection" in index["sankey"]
+        assert "Environmental Protection->Carbon Market" not in index["sankey"]
 
     def test_sankey_index_includes_pipeline_stage_edges(self, tmp_path):
         from tcfd_extractor.visualization.html_assembler import build_context_index
@@ -262,9 +259,9 @@ class TestPortfolioInsights:
             {"is_tcfd_related": False, "keyword_a": "x", "keyword_b": "y"},
         ]
         pairs = build_top_keyword_pairs(records, limit=2)
-        assert pairs[0]["pair"] == "环保 / 风险"
+        assert pairs[0]["pair"] == "Environmental Protection / Risk"
         assert pairs[0]["count"] == "2"
-        assert "Environmental Protection" in pairs[0]["translated"]
+        assert pairs[0]["translated"] == "Top co-occurring disclosure terms"
 
 
 class TestContextInjection:

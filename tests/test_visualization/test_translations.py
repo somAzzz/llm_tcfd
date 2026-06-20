@@ -9,6 +9,7 @@ from tcfd_extractor.visualization.translations import (
     translate,
     is_translated,
     missing_translations_for,
+    has_cjk,
     translate_smart,
 )
 
@@ -19,11 +20,10 @@ class TestTranslate:
         assert translate("低碳") == "Low-Carbon"
         assert translate("环保") == "Environmental Protection"
 
-    def test_unknown_keyword_returns_zh_marker(self):
+    def test_unknown_keyword_returns_public_english_fallback(self):
         result = translate("某未知关键词")
-        assert "某未知关键词" in result
-        assert result.startswith("[[ZH:")
-        assert result.endswith("]]")
+        assert result.startswith("Climate Disclosure Term ")
+        assert not has_cjk(result)
 
     def test_translate_exact_match(self):
         assert translate("碳交易") == "Carbon Trading"
@@ -125,13 +125,15 @@ class TestTranslateSmart:
         assert translate_smart("TCFD") == "TCFD"
         assert translate_smart("Carbon Neutrality") == "Carbon Neutrality"
 
-    def test_chinese_unmatched_wrapped_in_double_brackets(self):
+    def test_chinese_unmatched_returns_public_english_fallback(self):
         result = translate_smart("某未收录的术语")
-        assert result == "[[ZH: 某未收录的术语]]"
+        assert result.startswith("Climate Disclosure Term ")
+        assert not has_cjk(result)
 
     def test_chinese_with_punctuation_strips_symbols(self):
-        assert translate_smart("某词!") == "[[ZH: 某词]]"
-        assert translate_smart("某词（测试）") == "[[ZH: 某词测试]]"
+        assert translate_smart("某词!").startswith("Climate Disclosure Term ")
+        assert translate_smart("某词（测试）").startswith("Climate Disclosure Term ")
+        assert not has_cjk(translate_smart("某词!"))
 
     def test_empty_string_returns_empty(self):
         assert translate_smart("") == ""
@@ -164,11 +166,10 @@ class TestNewDictionaryEntries:
         assert KEYWORD_TRANSLATIONS[zh] == en
 
 
-class TestTranslateUnifiedDoubleBrackets:
-    """Spec §5.2: translate() 改用双中括号."""
+class TestTranslateEnglishFallback:
+    """Public report translation fallback must not leak Chinese text."""
 
-    def test_translate_unknown_uses_double_brackets(self):
+    def test_translate_unknown_uses_english_fallback(self):
         result = translate("某未收录的术语")
-        assert result == "[[ZH: 某未收录的术语]]"
-        assert result.startswith("[[ZH:")
-        assert result.endswith("]]")
+        assert result.startswith("Climate Disclosure Term ")
+        assert not has_cjk(result)

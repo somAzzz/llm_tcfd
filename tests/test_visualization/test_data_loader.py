@@ -163,8 +163,10 @@ def test_load_sunburst_data_returns_3_dim_tree(tmp_path):
     assert result[0]["children"][0]["name"] == "Cluster A"
     assert result[0]["children"][1]["name"] == "Cluster B"
     assert result[1]["children"][0]["name"] == "Cluster C"
-    # 关键词也翻译
-    assert result[0]["children"][0]["children"][0]["name"] == "词1"  # 不在 dict, 保留原文
+    # Unknown Chinese keywords fall back to English-only labels for public HTML.
+    assert result[0]["children"][0]["children"][0]["name"].startswith(
+        "Climate Disclosure Term "
+    )
     # 技术维度 children 应为空列表 (cluster 空)
     assert result[2]["children"] == []
 
@@ -192,8 +194,8 @@ def test_load_sunburst_translates_realistic_chinese_math_labels(tmp_path):
     assert "Emission Cap" in cluster_names
     # 节能减排 在 dict 中 → "Energy Saving & Emission Reduction"
     assert "Energy Saving & Emission Reduction" in cluster_names
-    # 不在 dict 的中文 → fallback "Cluster {id}"
-    assert "Cluster 2" in cluster_names  # 未知中文标签XYZ
+    # Unknown mixed labels keep their ASCII signal without leaking Chinese.
+    assert "Xyz" in cluster_names
     # 不能有 [[ZH: ...]] wrapper
     for c in cluster_names:
         assert not c.startswith("[[ZH:"), f"untranslated Chinese: {c!r}"
