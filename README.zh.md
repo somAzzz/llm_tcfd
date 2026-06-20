@@ -14,6 +14,7 @@
 - [架构](#架构)
 - [模块说明](#模块说明)
 - [HR 可视化报告](#hr-可视化报告)
+- [Output 目录关系图](#output-目录关系图)
 - [数据假设](#数据假设)
 - [测试](#测试)
 - [开发与重构记录](#开发与重构记录)
@@ -146,9 +147,11 @@ src/tcfd_extractor/
     ├── anonymize.py                     # 单向 SHA-256 公司名脱敏
     ├── translations.py                  # 中→英关键词映射(~140 条)
     ├── data_loader.py                   # 25 年 JSONL 加载 + 聚合
-    ├── static_charts.py                 # matplotlib 重构对比图 + 模块依赖 SVG
+    ├── echarts.py                       # ECharts option 构建 + JS formatter 编码
+    ├── pipeline_metrics.py              # 工程健康指标定义
+    ├── static_charts.py                 # 兼容保留的静态 SVG helper
     ├── module_graph.py                  # AST 自动发现模块依赖
-    ├── html_assembler.py                # 编排器:数据 → 图表 → 模板
+    ├── html_assembler.py                # 数据包契约 + HTML 组装边界
     └── template.py                      # Jinja2 HTML 模板
 ```
 
@@ -195,9 +198,11 @@ src/tcfd_extractor/
 - `anonymize.py` —— 单向 SHA-256 公司名脱敏(`Company #001` 风格,无反向表)
 - `translations.py` —— 中→英关键词映射表(~140 条),UI 全英文,数据保留中文
 - `data_loader.py` —— JSONL 批量加载 + KPI/维度/年份/Top 共现词对聚合
-- `static_charts.py` —— matplotlib 重构前后对比 + 模块依赖图(AST 自动发现)
+- `echarts.py` —— Sunburst / Streamgraph / Network / Sankey / 工程图表的 ECharts option 构建
+- `pipeline_metrics.py` —— 注入报告数据包的工程健康指标
+- `static_charts.py` —— 为兼容保留的静态 SVG helper
 - `module_graph.py` —— AST 解析本地模块 import 关系
-- `html_assembler.py` —— 编排器:数据 → 图表 → Jinja2 模板
+- `html_assembler.py` —— 构建 `ReportDataBundle` 数据契约,再渲染 Jinja2
 - `template.py` —— Jinja2 内联 HTML 模板(5 区块 + 隐藏 Tech Deep Dive)
 
 ### 6. 工具与脚本(`scripts/`)
@@ -242,17 +247,17 @@ output/report/
 
 ### 报告内容(5 区块)
 
-1. **Hero / Overview** —— 4 个 KPI 卡片 + TCFD 维度分布 donut
-2. **What We Built** —— 6 阶段流水线 Mermaid + "Beyond TCFD: Reusable Architecture" 营销卡
-3. **What We Discovered** —— 年度趋势双线图(可按年段过滤) + Top 10 关键词对双语 tooltip
-4. **Engineering Excellence** —— 468→79 行重构对比图 + 165 测试指标
-5. **Tech Deep Dive** —— 默认折叠的模块依赖图(AST 自动发现)
+1. **What is this project about?** —— 动态 KPI 卡片 + TCFD 维度/聚类 Sunburst
+2. **What We Built** —— 6 阶段流水线 Mermaid + "Beyond TCFD: Reusable Architecture" 展示卡
+3. **What We Discovered** —— 年度 Streamgraph + 近三年共现网络 + 流水线 Sankey
+4. **Robust AI Pipeline Engineering** —— 工程健康 ECharts dashboard
+5. **Tech Deep Dive** —— 点击展开的模块依赖图(AST 自动发现)
 
 ### 设计原则
 
 - **双层受众**:非技术 HR(30 秒看懂 KPI) + 技术 HR(展开 Tech Deep Dive 看架构)
 - **数据隐私**:公司名单向 SHA-256 哈希(无反向表),`output/report/` 不进 git
-- **部署友好**:单文件 HTML,可直接 GitHub Pages 部署(详见 spec §14)
+- **部署友好**:单文件 HTML,可直接 GitHub Pages 部署
 - **泄漏安全**:推送到公开仓库前必须通过 `scripts/check_leakage.py`
 
 ### GitHub Pages 部署
@@ -261,6 +266,12 @@ output/report/
 2. 推送 `index.html` + `README.md` + `.nojekyll`
 3. Settings → Pages → Branch: `main` → Save
 4. 获得 `https://somAzzz.github.io/tcfd-report/` 公开链接
+
+## Output 目录关系图
+
+`output/` 下的生成数据被主仓库忽略,其中混有正式流水线产物、私有实验产物和
+独立的公开报告发布仓库。当前关系图、公开安全说明和可归档候选见
+[OUTPUT.md](./OUTPUT.md)。
 
 ## 数据假设
 
@@ -289,7 +300,7 @@ uv run pytest --cov=src/tcfd_extractor
 
 - `tests/test_config.py` —— 全局配置 + 线程安全(18 + 3 测试)
 - `tests/test_cooccurrence_evaluator.py` —— 向后兼容(16 测试)
-- `tests/evaluation/` —— 评估模块单元测试 + 集成测试(7 文件,53 测试)
+- `tests/evaluation/` —— 评估模块单元测试 + 集成测试
   - `test_exceptions.py` —— 异常层次(7)
   - `test_models.py` —— 数据模型(12)
   - `test_prompts.py` —— 提示词常量(9)
@@ -298,7 +309,7 @@ uv run pytest --cov=src/tcfd_extractor
   - `test_batch.py` —— 批量评估(8)
   - `test_summary.py` —— 统计 + 总结(8)
   - `test_integration.py` —— 端到端集成测试(3)
-- `tests/test_visualization/` —— 可视化报告测试(7 文件,65 测试)
+- `tests/test_visualization/` —— 可视化报告测试
   - `test_anonymize.py` —— 脱敏(14)
   - `test_translations.py` —— 中→英映射 + 覆盖率(12)
   - `test_data_loader.py` —— JSONL 加载 + 聚合(14)

@@ -1,5 +1,4 @@
 from typing import Dict, List, Tuple
-from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import numpy as np
@@ -11,7 +10,15 @@ class KeywordClustering:
     def __init__(self, k_range: Tuple[int, int] = (3, 30), model_name: str = "BAAI/bge-m3"):
         self.k_range = k_range
         self.model_name = model_name
-        self.model = SentenceTransformer(model_name, device='cuda')
+        self._model = None
+
+    @property
+    def model(self):
+        """Load the embedding model only when clustering actually runs."""
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer(self.model_name, device='cuda')
+        return self._model
 
     def cluster(self, vocabulary: Dict[str, List[str]], save_embeddings: bool = True) -> Dict[str, List[dict]]:
         """对每个维度分别进行K-Means聚类

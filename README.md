@@ -14,6 +14,7 @@
 - [Architecture](#architecture)
 - [Modules](#modules)
 - [Visualization Report](#visualization-report)
+- [Output Directory Map](#output-directory-map)
 - [Data Assumptions](#data-assumptions)
 - [Testing](#testing)
 - [Development & Refactoring Log](#development--refactoring-log)
@@ -146,10 +147,11 @@ src/tcfd_extractor/
     ├── anonymize.py                     # One-way SHA-256 company name hashing
     ├── translations.py                  # ZH→EN keyword map (~140 entries)
     ├── data_loader.py                   # 25-year JSONL loader + aggregations
-    ├── chart_builders.py                # 3 Plotly charts (donut/trend/bar)
-    ├── static_charts.py                 # matplotlib refactor bar + module dep SVG
+    ├── echarts.py                       # ECharts option builders + JS formatter encoder
+    ├── pipeline_metrics.py              # Engineering-health metric definitions
+    ├── static_charts.py                 # Legacy static SVG helpers
     ├── module_graph.py                  # AST-based module dependency discovery
-    ├── html_assembler.py                # Orchestrator: data → charts → template
+    ├── html_assembler.py                # Data bundle + HTML assembly boundary
     └── template.py                      # Jinja2 HTML template
 ```
 
@@ -196,10 +198,11 @@ Aggregates 25 years of evaluation results into a **self-contained interactive HT
 - `anonymize.py` — One-way SHA-256 company name hashing (`Company #001` style, no reverse map)
 - `translations.py` — ZH→EN keyword map (~140 entries); UI fully English, data retains Chinese
 - `data_loader.py` — JSONL bulk loader + KPI / dimension / yearly / top-pairs aggregations
-- `chart_builders.py` — 3 Plotly charts (TCFD dimension donut, yearly trend double-line, top keyword pairs with bilingual tooltips)
-- `static_charts.py` — matplotlib refactor before/after + module dependency graph (AST-discovered)
+- `echarts.py` — ECharts builders for sunburst / streamgraph / network / sankey / engineering charts
+- `pipeline_metrics.py` — Engineering-health metrics injected into the report data bundle
+- `static_charts.py` — Legacy static SVG helpers retained for compatibility
 - `module_graph.py` — AST-based local import relationship discovery
-- `html_assembler.py` — Orchestrator: data → charts → Jinja2 template
+- `html_assembler.py` — Builds a `ReportDataBundle` contract, then renders Jinja2
 - `template.py` — Jinja2 inline HTML template (5 sections + hidden Tech Deep Dive)
 
 ### 6. Tools & Scripts (`scripts/`)
@@ -235,17 +238,17 @@ output/report/
 
 ### Report contents (5 sections)
 
-1. **Hero / Overview** — 4 KPI cards + TCFD dimension distribution donut
-2. **What We Built** — 6-stage pipeline Mermaid + "Beyond TCFD: Reusable Architecture" marketing callout
-3. **What We Discovered** — Yearly trend double-line chart (filterable by range) + Top 10 keyword pairs with bilingual tooltips
-4. **Engineering Excellence** — 468→79 refactor comparison chart + test count metric
-5. **Tech Deep Dive** — Default-collapsed module dependency graph (AST-discovered)
+1. **What is this project about?** — dynamic KPI cards + TCFD dimension/cluster sunburst
+2. **What We Built** — 6-stage pipeline Mermaid + "Beyond TCFD: Reusable Architecture" callout
+3. **What We Discovered** — yearly streamgraph + recent co-occurrence network + pipeline Sankey
+4. **Robust AI Pipeline Engineering** — engineering-health ECharts dashboard
+5. **Tech Deep Dive** — click-to-expand module dependency graph (AST-discovered)
 
 ### Design principles
 
 - **Two-audience design**: non-technical HR (30-second scan of KPIs) + technical HR (expand Tech Deep Dive for architecture)
 - **Data privacy**: company names are SHA-256 hashed one-way (no reverse map); `output/report/` is not committed
-- **Deployment-friendly**: single-file HTML, can be deployed directly to GitHub Pages (see spec §14)
+- **Deployment-friendly**: single-file HTML, can be deployed directly to GitHub Pages
 - **Leakage-safe**: must pass `scripts/check_leakage.py` before any public-repo push
 
 ### GitHub Pages deployment
@@ -254,6 +257,13 @@ output/report/
 2. Push `index.html` + `README.md` + `.nojekyll`
 3. Settings → Pages → Branch: `main` → Save
 4. Get `https://<user>.github.io/tcfd-hr-report/` public URL
+
+## Output Directory Map
+
+Generated data under `output/` is intentionally ignored by the main repo and
+mixes canonical pipeline outputs, private experiments, and the nested public
+report repository. See [OUTPUT.md](./OUTPUT.md) for the current relationship
+map, public-safety notes, and archive candidates.
 
 ## Data Assumptions
 
@@ -291,11 +301,11 @@ Test organization:
   - `test_batch.py` — Batch evaluator (8)
   - `test_summary.py` — Statistics + summary (8)
   - `test_integration.py` — End-to-end integration (3)
-- `tests/test_visualization/` — Visualization report tests (7 files, 65 tests)
+- `tests/test_visualization/` — Visualization report tests
   - `test_anonymize.py` — Anonymization (14)
   - `test_translations.py` — ZH→EN map + coverage (12)
   - `test_data_loader.py` — JSONL loader + aggregations (14)
-  - `test_chart_builders.py` — Plotly charts (9)
+  - `test_echarts.py` — ECharts option builders + JS formatter serialization
   - `test_static_charts.py` — matplotlib + SVG (5)
   - `test_module_graph.py` — AST dependency discovery (5)
   - `test_html_assembler.py` — End-to-end template rendering (7, some need `PYTHONPATH=src`)
@@ -341,7 +351,7 @@ Test organization:
 
 | Metric | Value |
 |---|---|
-| New modules | 8 (`anonymize` / `translations` / `data_loader` / `chart_builders` / `static_charts` / `module_graph` / `html_assembler` / `template`) |
+| New modules | `anonymize` / `translations` / `data_loader` / `echarts` / `pipeline_metrics` / `static_charts` / `module_graph` / `html_assembler` / `template` |
 | New scripts | 2 (`build_report.py` orchestrator, `check_leakage.py` pre-push leakage checker) |
 | New tests | 65 (across 7 test files) |
 | Total tests | 228 passing (target ≥ 200) |

@@ -52,8 +52,23 @@ class TestAssembleHtml:
             module_graph_svg="<svg></svg>",
             refactor_stats={"test_after": 165, "test_before": 16},
         )
-        assert "10,814" in html  # companies
+        assert ">2<" in html  # companies from the fixture's two file ids
+        assert ">1<" in html  # one TCFD-related disclosure
+        assert "2020" in html
         assert "165 tests passing" in html
+
+    def test_accepts_prebuilt_report_data_bundle(self, tmp_path):
+        from tcfd_extractor.visualization.html_assembler import build_report_data_bundle
+        results = _make_min_results(tmp_path)
+        bundle = build_report_data_bundle(
+            results_root=results,
+            streamgraph_years=[2020],
+            network_years=[2020],
+            refactor_stats={"test_after": 7, "test_before": 1},
+        )
+        html = assemble_html(results_root=results, data_bundle=bundle)
+        assert "7 tests passing" in html
+        assert "window.__hrContextIndex" in html
 
     def test_english_titles_present(self, tmp_path):
         results = _make_min_results(tmp_path)
@@ -176,6 +191,15 @@ class TestBuildContextIndex:
         # 第二组: 环保 ↔ 碳市场
         assert "环保->碳市场" in index["sankey"]
         assert "碳市场->环保" not in index["sankey"]
+
+    def test_sankey_index_includes_pipeline_stage_edges(self, tmp_path):
+        from tcfd_extractor.visualization.html_assembler import build_context_index
+        results = self._make_results(tmp_path)
+        index = build_context_index(eval_dir=results, years=[2023])
+        assert "Reports 2023->Chunks 2023" in index["sankey"]
+        assert "Chunks 2023->Disclosures 2023" in index["sankey"]
+        assert "Disclosures 2023->Policy Keywords" in index["sankey"]
+        assert "Disclosures 2023->Market Keywords" in index["sankey"]
 
     def test_unrelated_records_excluded(self, tmp_path):
         from tcfd_extractor.visualization.html_assembler import build_context_index

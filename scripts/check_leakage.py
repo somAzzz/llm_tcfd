@@ -4,12 +4,12 @@
 Scans `output/report/index.html` for known sensitive terms.
 
 Before pattern-matching, the script strips:
-- `<script type="application/json">` blocks (Plotly chart data — false positives)
+- `<script>` blocks (inlined chart data and runtime code — false positives)
 - `data:image/png;base64,...` values (matplotlib PNG binary — false positives)
 - `<style>` blocks (CSS — false positives)
 
-This is necessary because Plotly's default template embeds 16-digit colorscale
-positions and matplotlib PNGs contain arbitrary binary bytes.
+This is necessary because chart options and embedded assets may contain
+machine-generated strings that look sensitive but are not visible report text.
 
 Exit codes:
   0  = no leakage detected
@@ -37,10 +37,9 @@ KNOWN_COMPANIES = [
 
 # Patterns that should never appear in the public HTML's visible text.
 # Note: long digit runs (e.g., 16-digit numbers) are intentionally NOT in
-# this list because they appear legitimately in Plotly's default colorscale
-# template (0.1111111111111111, 0.2222222222222222, ...) and would cause
-# false positives. If you need to check for them, do it on extracted JSON
-# data only, not the entire HTML.
+# this list because generated chart options may contain long numeric values and
+# would cause false positives. If you need to check for them, do it on extracted
+# visible text or a sanitized JSON projection only, not the entire HTML.
 BAD_PATTERNS = [
     (r"@[\w.]+\.\w{2,}", "email-like pattern"),
     (r"\b1[3-9]\d{9}\b", "Chinese mobile phone number"),

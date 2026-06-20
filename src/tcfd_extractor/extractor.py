@@ -8,6 +8,19 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 
+def _resolve_project_path(path: str | Path) -> Path:
+    """Resolve known project path aliases kept for backward compatibility."""
+    candidate = Path(path)
+    if candidate.exists():
+        return candidate
+    parts = candidate.parts
+    if parts and parts[0] == "doc":
+        docs_candidate = Path("docs", *parts[1:])
+        if docs_candidate.exists():
+            return docs_candidate
+    return candidate
+
+
 class TCFDKeywords(BaseModel):
     """TCFD关键词输出结构"""
 
@@ -24,7 +37,7 @@ class TCFDKeywords(BaseModel):
 
 def load_word_bag(path: str) -> dict[str, list[str]]:
     """从 words_bag.md 加载词袋"""
-    content = Path(path).read_text(encoding="utf-8")
+    content = _resolve_project_path(path).read_text(encoding="utf-8")
     word_bag = {"政策维度": [], "市场维度": [], "技术维度": []}
 
     # 解析词袋格式
@@ -45,6 +58,7 @@ def load_word_bag(path: str) -> dict[str, list[str]]:
 
 def read_text_with_fallback(path: Path) -> str:
     """尝试多种编码读取文本"""
+    path = _resolve_project_path(path)
     encodings = ["utf-8", "gbk", "gb2312", "latin1"]
     for enc in encodings:
         try:

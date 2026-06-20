@@ -249,19 +249,19 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
   <div class="container">
     <div class="kpi-row">
       <div class="kpi-card">
-        <p class="number">10,814</p>
+        <p class="number">{{ report_stats.get("companies", "0") }}</p>
         <p class="label">Companies Analyzed</p>
       </div>
       <div class="kpi-card">
-        <p class="number">52,000+</p>
+        <p class="number">{{ report_stats.get("disclosures", "0") }}</p>
         <p class="label">TCFD Disclosures Detected</p>
       </div>
       <div class="kpi-card">
-        <p class="number">2000–2024</p>
+        <p class="number">{{ report_stats.get("year_range", "N/A") }}</p>
         <p class="label">Years Covered</p>
       </div>
       <div class="kpi-card">
-        <p class="number">{{ refactor_stats.get("test_after", 0) }} tests passing</p>
+        <p class="number">{{ report_stats.get("test_count", "0") }} tests passing</p>
         <p class="label">Engineering Quality</p>
       </div>
     </div>
@@ -489,9 +489,7 @@ flowchart LR
           // JS 源码当 template 渲染)。所以这里也不再需要 stripPrefix。
           const source = params.data.source;
           const target = params.data.target;
-          // 关键: 与 build_context_index 保持一致 — 排序后的 a->b 字符串
-          const pair = [source, target].sort();
-          const edgeKey = `${pair[0]}->${pair[1]}`;
+          const edgeKey = `${source}->${target}`;
           const contexts = _contextsFor(edgeKey, 'sankey');
           window.Alpine.store('hrApp').openPanel({
             type: 'link',

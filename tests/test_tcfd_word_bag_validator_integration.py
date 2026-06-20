@@ -45,9 +45,13 @@ def test_end_to_end_cli(sample_word_bank, tmp_path):
     print("STDOUT:", result.stdout)
     print("STDERR:", result.stderr)
 
-    # Skip if LLM is not available (API returned 404)
-    if "Error code: 404" in result.stdout or "Not Found" in result.stdout:
-        pytest.skip("LLM API not available (got 404)")
+    # Skip if LLM is not available.
+    if (
+        "Error code: 404" in result.stdout
+        or "Not Found" in result.stdout
+        or "Connection error" in result.stdout
+    ):
+        pytest.skip("LLM API not available")
 
     # Check output file exists
     assert output_path.exists(), f"Output file not created. stderr: {result.stderr}"

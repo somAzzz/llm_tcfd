@@ -8,7 +8,7 @@ Usage:
 The script:
 1. Loads all JSONL results from output/evaluate_cooccurrence/
 2. Anonymizes company names (via the visualization layer)
-3. Builds 4 ECharts charts (sunburst/streamgraph/network/sankey) + 1 matplotlib chart + 1 SVG module graph
+3. Builds 4 ECharts charts (sunburst/streamgraph/network/sankey) + 1 AI pipeline chart + 1 module graph
 4. Renders the Jinja2 template with all chart data inlined (single-file HTML, 1.5-2MB)
 5. Writes index.html, README.md, .nojekyll to output dir
 6. Runs the leakage check (must pass for the script to exit 0)
@@ -108,22 +108,23 @@ def main() -> int:
     )
     pipeline_metrics = [*ALL_STATIC_METRICS, test_coverage]
 
-    print("Building module graph SVG (via AST discovery)...")
-    from tcfd_extractor.visualization.module_graph import discover_module_graph
-    from tcfd_extractor.visualization.static_charts import build_module_graph_svg
-    module_graph = discover_module_graph(Path("src/tcfd_extractor/evaluation"))
-    module_svg = build_module_graph_svg(module_graph)
-
-    print("Assembling HTML...")
-    from tcfd_extractor.visualization.html_assembler import assemble_html
-    html = assemble_html(
+    print("Building report data bundle...")
+    from tcfd_extractor.visualization.html_assembler import (
+        assemble_html,
+        build_report_data_bundle,
+    )
+    data_bundle = build_report_data_bundle(
         results_root=Path("output/evaluate_cooccurrence"),
         pipeline_metrics=pipeline_metrics,
-        module_graph_svg=module_svg,
         refactor_stats={
             "test_before": test_count_before,
             "test_after": test_count_after,
         },
+    )
+    print("Assembling HTML...")
+    html = assemble_html(
+        results_root=Path("output/evaluate_cooccurrence"),
+        data_bundle=data_bundle,
     )
 
     index_path = output_dir / "index.html"
@@ -161,12 +162,12 @@ Test count: {test_count_after} passing
    dependency graph of the evaluation subpackage.
 
 All data is anonymized (company names are replaced with generic labels)
-and embedded in the HTML; nothing is fetched at runtime except Plotly and
-Mermaid from CDN.
+and embedded in the HTML; runtime libraries are loaded from ECharts, Alpine,
+Google Fonts, and Mermaid CDNs.
 
 ## How to view locally
 
-Open `index.html` in any modern browser. Loads Plotly and Mermaid from CDN.
+Open `index.html` in any modern browser.
 
 ## Development
 
@@ -190,7 +191,7 @@ The build script:
 - Runs `pytest --collect-only` to fill the "Test count" stat
 - Discovers the evaluation subpackage module graph via AST
 - Assembles 4 ECharts options (sunburst / streamgraph / network / sankey)
-  + 1 AI Pipeline dashboard + 1 module graph SVG
+  + 1 AI Pipeline dashboard + 1 module graph
 - Renders the Jinja2 template with all data inlined (single-file HTML)
 - Auto-runs the leakage check and exits 1 if it fails
 
