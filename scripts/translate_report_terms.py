@@ -184,13 +184,19 @@ def load_existing_translations(path: Path) -> dict[str, str]:
     return TranslationMap(translations=raw).translations
 
 
-def extract_json_object(text: str) -> dict[str, Any]:
-    """Extract the first usable JSON object from an LLM response."""
+def extract_json_objects(text: str) -> list[dict[str, Any]]:
+    """Extract every usable JSON object from an LLM response.
+
+    Qwen reasoning traces often echo the prompt's example JSON before the final
+    answer.  We keep all objects here and choose the best candidate later,
+    instead of trusting the first brace pair in the response.
+    """
     text = text.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
 
     decoder = json.JSONDecoder()
+    objects: list[dict[str, Any]] = []
     for i, ch in enumerate(text):
         if ch != "{":
             continue
@@ -199,23 +205,39 @@ def extract_json_object(text: str) -> dict[str, Any]:
         except json.JSONDecodeError:
             continue
         if isinstance(obj, dict):
-            return obj
-    raise ValueError(f"No JSON object found in LLM response: {text[:200]!r}")
+            objects.append(obj)
+    if not objects:
+        raise ValueError(f"No JSON object found in LLM response: {text[:200]!r}")
+    return objects
 
 
 def parse_translation_response(text: str, expected_terms: list[str]) -> dict[str, str]:
-    obj = extract_json_object(text)
-    translations = obj.get("translations", obj)
-    if not isinstance(translations, dict):
-        raise ValueError("JSON response must be an object or contain a translations object")
-    validated = TranslationMap(translations=translations)
-    try:
-        validated.require_terms(expected_terms)
-    except ValueError:
-        if len(validated.translations) != len(expected_terms):
-            raise
-        return dict(zip(expected_terms, validated.translations.values(), strict=True))
-    return {term: validated.translations[term] for term in expected_terms}
+    errors: list[str] = []
+    best_ordered: dict[str, str] | None = None
+    best_exact: dict[str, str] | None = None
+    for obj in extract_json_objects(text):
+        translations = obj.get("translations", obj)
+        if not isinstance(translations, dict):
+            errors.append("JSON response must be an object or contain a translations object")
+            continue
+        try:
+            validated = TranslationMap(translations=translations)
+        except (ValidationError, ValueError) as exc:
+            errors.append(str(exc))
+            continue
+        matched = [term for term in expected_terms if term in validated.translations]
+        if len(matched) == len(expected_terms):
+            best_exact = {term: validated.translations[term] for term in expected_terms}
+            continue
+        if len(validated.translations) == len(expected_terms):
+            best_ordered = dict(zip(expected_terms, validated.translations.values(), strict=True))
+        errors.append(f"candidate covered {len(matched)}/{len(expected_terms)} expected terms")
+
+    if best_exact is not None:
+        return best_exact
+    if best_ordered is not None:
+        return best_ordered
+    raise ValueError("; ".join(errors[-3:]) or "No valid translation JSON candidate found")
 
 
 def build_prompt(terms: list[str]) -> str:
@@ -223,14 +245,15 @@ def build_prompt(terms: list[str]) -> str:
         "/no_think\n"
         "Translate these Chinese climate, energy, environmental, and industrial "
         "disclosure terms into concise professional English chart labels.\n"
-        "Return only this JSON shape: {\"translations\": {\"source term\": \"English Label\"}}.\n"
+        "Return only one compact JSON object. The object keys must be exactly the "
+        "Chinese terms in the input list, and each value must be the English label.\n"
         "Rules:\n"
         "- Include every source term exactly as a key.\n"
         "- Values must contain no Chinese characters.\n"
         "- Preserve acronyms such as ESG, VOCs, CO2, PV, LNG, LED, SCR.\n"
         "- Prefer 2 to 6 words. Use Title Case.\n"
         "- Do not explain, reason, or wrap the JSON in markdown.\n\n"
-        f"Terms:\n{json.dumps(terms, ensure_ascii=False)}"
+        f"Input terms:\n{json.dumps(terms, ensure_ascii=False)}"
     )
 
 
@@ -241,7 +264,14 @@ def translate_batch(
     terms: list[str],
     temperature: float,
     max_tokens: int,
+    disable_thinking: bool,
 ) -> dict[str, str]:
+    extra_body = None
+    if disable_thinking:
+        extra_body = {
+            "chat_template_kwargs": {"enable_thinking": False},
+            "separate_reasoning": False,
+        }
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -256,6 +286,7 @@ def translate_batch(
         ],
         temperature=temperature,
         max_tokens=max_tokens,
+        extra_body=extra_body,
     )
     content = response.choices[0].message.content or ""
     return parse_translation_response(content, terms)
@@ -280,6 +311,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=llm_settings.timeout)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=4096)
+    parser.add_argument(
+        "--enable-thinking",
+        action="store_true",
+        help="Allow Qwen reasoning output. By default the script asks sglang to disable it.",
+    )
     parser.add_argument("--batch-size", type=int, default=12)
     parser.add_argument("--max-retries", type=int, default=3)
     parser.add_argument("--retry-delay", type=float, default=1.0)
@@ -340,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
                     terms=batch,
                     temperature=args.temperature,
                     max_tokens=args.max_tokens,
+                    disable_thinking=not args.enable_thinking,
                 )
                 translations.update(translated)
                 print(f"Batch {batch_index}/{total_batches}: translated {len(batch)} terms")
