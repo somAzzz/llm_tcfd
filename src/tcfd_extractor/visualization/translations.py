@@ -290,6 +290,7 @@ KEYWORD_TRANSLATIONS: dict[str, str] = {
 }
 
 _GENERATED_TRANSLATIONS_PATH = Path(__file__).with_name("llm_translations.json")
+BASE_KEYWORD_TRANSLATIONS = dict(KEYWORD_TRANSLATIONS)
 if _GENERATED_TRANSLATIONS_PATH.exists():
     KEYWORD_TRANSLATIONS.update(
         json.loads(_GENERATED_TRANSLATIONS_PATH.read_text(encoding="utf-8"))

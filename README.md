@@ -196,7 +196,7 @@ Refactored in 2026-06. The original 468-line god class has been decomposed into 
 Aggregates 25 years of evaluation results into a **self-contained interactive HTML report**, suitable for portfolio / job application use:
 
 - `anonymize.py` — One-way SHA-256 company name hashing (`Company #001` style, no reverse map)
-- `translations.py` — ZH→EN keyword map (~140 entries); UI fully English, data retains Chinese
+- `translations.py` — ZH→EN keyword map plus optional LLM-generated chart-label translations
 - `data_loader.py` — JSONL bulk loader + KPI / dimension / yearly / top-pairs aggregations
 - `echarts.py` — ECharts builders for sunburst / streamgraph / network / sankey / engineering charts
 - `pipeline_metrics.py` — Engineering-health metrics injected into the report data bundle
@@ -209,17 +209,24 @@ Aggregates 25 years of evaluation results into a **self-contained interactive HT
 
 - `tcfd_word_bag_validator.py` — Word-bag validation CLI
 - `build_report.py` — Report generator (data → HTML + leakage check)
+- `translate_report_terms.py` — Local sglang translation helper with Pydantic validation
 - `check_leakage.py` — Pre-push leakage checker (company names + email + phone + TODO patterns)
 
 ## Visualization Report
 
-**🌐 Live demo**: https://somAzzz.github.io/tcfd-report/
+**Live demo**: https://somazzz.github.io/tcfd-report/
 
 The `visualization` package ships a complete "research project → portfolio HTML" pipeline, useful for showcasing project results (especially for job applications to HR / hiring managers).
 
 ### One-command generation
 
 ```bash
+# Optional: translate Sunburst/Network chart terms with local sglang.
+# Writes src/tcfd_extractor/visualization/llm_translations.json.
+python scripts/translate_report_terms.py \
+  --model Qwen/Qwen3.5-35B-A3B \
+  --batch-size 12
+
 # Default: GitHub Pages mode (CDN-loaded JS, ~1.5 MB)
 python scripts/build_report.py --output output/report/
 
@@ -238,8 +245,8 @@ output/report/
 
 ### Report contents (5 sections)
 
-1. **What is this project about?** — dynamic KPI cards + TCFD dimension/cluster sunburst
-2. **What We Built** — 6-stage pipeline Mermaid + "Beyond TCFD: Reusable Architecture" callout
+1. **Result** — dynamic KPI cards + TCFD dimension/cluster sunburst
+2. **System** — custom 6-stage pipeline board + reusable architecture notes
 3. **What We Discovered** — yearly streamgraph + recent co-occurrence network + pipeline Sankey
 4. **Robust AI Pipeline Engineering** — engineering-health ECharts dashboard
 5. **Tech Deep Dive** — click-to-expand module dependency graph (AST-discovered)
