@@ -116,6 +116,15 @@ class TestAssembleHtml:
         assert 'id="echarts-network"' in html
         assert 'id="echarts-sankey"' in html
 
+    def test_chart_formatters_are_inlined_as_functions(self, tmp_path):
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            module_graph_svg="<svg></svg>",
+        )
+        assert '"formatter": function (params)' in html
+        assert '"formatter": "function (params)' not in html
+
     def test_assembled_html_has_4_echarts_charts(self, tmp_path):
         """集成测试: 生成的 HTML 含 4 个 ECharts 初始化块 (Stage 2: 通过 buildChart 统一管理, rebuildAllCharts 触发 4 次)。"""
         from tcfd_extractor.visualization.html_assembler import assemble_html

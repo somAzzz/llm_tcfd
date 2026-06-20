@@ -424,9 +424,9 @@ def build_report_data_bundle(
     top_pairs = build_top_keyword_pairs(all_results)
 
     return ReportDataBundle(
-        sunburst_json=_json.dumps(sunburst_opt, ensure_ascii=False),
+        sunburst_json=encode_echarts_option(sunburst_opt),
         streamgraph_json=_json.dumps(streamgraph_opt, ensure_ascii=False),
-        network_json=_json.dumps(network_opt, ensure_ascii=False),
+        network_json=encode_echarts_option(network_opt),
         sankey_json=_json.dumps(sankey_opt, ensure_ascii=False),
         pipeline_health_dashboard_json=encode_echarts_option(
             dashboard_opt, default=_dataclass_default,
