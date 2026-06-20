@@ -16,6 +16,7 @@ from scripts.translate_report_terms import (
 def test_parse_translation_response_extracts_json_after_reasoning():
     raw = """
 Thinking briefly...
+{"translations": {"低碳园区": "Example"}}
 {"translations": {"低碳园区": "Low-Carbon Industrial Park"}}
 """
     parsed = parse_translation_response(raw, ["低碳园区"])
