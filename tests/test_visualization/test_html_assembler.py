@@ -173,6 +173,12 @@ class TestAssembleHtml:
         assert "Streaming and concurrency" in html
         assert "Publication checks" in html
         assert "pipelineHealthDashboard" in html
+        assert "Failure mode" in html
+        assert "Malformed LLM JSON" in html
+        assert "Memory pressure" in html
+        assert "Public data leakage" in html
+        assert "uv run python scripts/build_report.py" in html
+        assert "Inspect module graph" in html
 
 
 class TestBuildContextIndex:
