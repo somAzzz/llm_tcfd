@@ -184,6 +184,30 @@ _WRAP_XAXIS_FN = JsFunction(
     "}"
 )
 
+_FULL_LABEL_TOOLTIP_FN = JsFunction(
+    "function (params) {"
+    "  var d = params.data || {};"
+    "  var label = d.fullLabel || d.name || params.name || '';"
+    "  var value = (d.value !== undefined) ? d.value : params.value;"
+    "  var extra = (value !== undefined && value !== null && typeof value !== 'object')"
+    "    ? '<br/><b>' + value + '</b>' : '';"
+    "  return label + extra;"
+    "}"
+)
+
+_NETWORK_TOOLTIP_FN = JsFunction(
+    "function (params) {"
+    "  var d = params.data || {};"
+    "  if (params.dataType === 'edge') {"
+    "    var source = d.fullSource || d.source || '';"
+    "    var target = d.fullTarget || d.target || '';"
+    "    return source + ' -> ' + target + '<br/><b>' + (d.weight || d.value || 0) + ' co-occurrences</b>';"
+    "  }"
+    "  var label = d.fullLabel || d.name || params.name || '';"
+    "  return label + '<br/><b>' + (d.value || 0) + ' connections</b>';"
+    "}"
+)
+
 
 # builder 函数将在 Task 2.2-2.5 添加
 
@@ -214,6 +238,7 @@ def build_sunburst(data: list[dict], theme: dict) -> dict:
         "TCFD Dimensions & Clusters",
         "Click a node to drill down"
     )
+    opt["tooltip"]["formatter"] = _FULL_LABEL_TOOLTIP_FN
     # Stage 4: 3 个 dim 颜色用作 dim 层 (depth=1) 的 itemStyle.color list
     dim_colors = [
         theme["colors"]["policy"],
@@ -329,6 +354,7 @@ def build_network(data: dict, theme: dict) -> dict:
         "Keyword Co-occurrence Network (Recent 3 Years)",
         "Draggable nodes, hover to see co-occurrence count"
     )
+    opt["tooltip"]["formatter"] = _NETWORK_TOOLTIP_FN
     n_edges = len(data["links"])
     # 边数过少时, 注入 subtext 提示
     if n_edges < 50:

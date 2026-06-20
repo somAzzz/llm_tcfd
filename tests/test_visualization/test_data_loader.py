@@ -192,8 +192,11 @@ def test_load_sunburst_translates_realistic_chinese_math_labels(tmp_path):
     cluster_names = [c["name"] for c in result[0]["children"]]
     # 排放限值 现在在 dict → "Emission Cap"
     assert "Emission Cap" in cluster_names
-    # 节能减排 在 dict 中 → "Energy Saving & Emission Reduction"
-    assert "Energy Saving & Emission Reduction" in cluster_names
+    # 节能减排 在 dict 中, chart display label may be shortened while
+    # fullLabel preserves the complete translation for tooltips/side panels.
+    assert "Energy Saving & Emission" in cluster_names
+    full_labels = [c.get("fullLabel") for c in result[0]["children"]]
+    assert "Energy Saving & Emission Reduction" in full_labels
     # Unknown mixed labels keep their ASCII signal without leaking Chinese.
     assert "Xyz" in cluster_names
     # 不能有 [[ZH: ...]] wrapper

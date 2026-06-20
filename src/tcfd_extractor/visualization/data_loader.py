@@ -8,7 +8,11 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from .translations import KEYWORD_TRANSLATIONS, translate, translate_chart_label
+from .translations import (
+    display_chart_label,
+    translate,
+    translate_chart_label,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -198,16 +202,24 @@ def load_sunburst_data(clusters_dir: Path, theme: dict | None = None) -> list[di
             cluster_id = cluster.get("cluster_id", "?")
             translated = _chart_translate(raw_label)
             if not translated:
-                cluster_name = f"Cluster {cluster_id}"
+                cluster_full_name = f"Cluster {cluster_id}"
             else:
-                cluster_name = translated
-            # 关键词也翻译 (保留原文若未收录)
-            kw_children = [{"name": _chart_translate(kw), "value": 1}
-                           for kw in cluster.get("keywords", [])]
+                cluster_full_name = translated
+            cluster_name = display_chart_label(raw_label or cluster_full_name)
+            # 关键词也翻译；name 用短展示名，fullLabel 保留完整翻译。
+            kw_children = [
+                {
+                    "name": display_chart_label(kw),
+                    "fullLabel": _chart_translate(kw),
+                    "value": 1,
+                }
+                for kw in cluster.get("keywords", [])
+            ]
             # Stage 4: 注入 dim 继承色到 cluster 节点, ECharts 优先 per-node color
             # 而非 levels[2] 的统一色, 实现 "父辈 dim 色 → 淡化过渡" 视觉流
             children.append({
                 "name": cluster_name,
+                "fullLabel": cluster_full_name,
                 "itemStyle": {"color": cluster_color},
                 "children": kw_children,
             })
@@ -323,7 +335,7 @@ def load_network_data(eval_dir: Path, years: list[int],
     label_by_kw: dict[str, str] = {}
     label_seen: Counter = Counter()
     for kw in seen:
-        base_label = translate_chart_label(kw)
+        base_label = display_chart_label(kw)
         label_seen[base_label] += 1
         label_by_kw[kw] = (
             base_label if label_seen[base_label] == 1
@@ -335,13 +347,20 @@ def load_network_data(eval_dir: Path, years: list[int],
         size = max(10, min(60, 10 + node_freq[kw] * 0.5))
         nodes.append({
             "id": label_by_kw[kw], "name": label_by_kw[kw],
+            "fullLabel": translate_chart_label(kw),
             "symbolSize": size,
             "category": translate(node_dim.get(kw, "无")),
             "value": node_freq[kw],
         })
     # 边列表
     links = [
-        {"source": label_by_kw[a], "target": label_by_kw[b], "weight": w}
+        {
+            "source": label_by_kw[a],
+            "target": label_by_kw[b],
+            "fullSource": translate_chart_label(a),
+            "fullTarget": translate_chart_label(b),
+            "weight": w,
+        }
         for (a, b), w in edges
     ]
     return {"nodes": nodes, "links": links}

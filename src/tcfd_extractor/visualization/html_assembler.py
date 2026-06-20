@@ -28,7 +28,7 @@ from .echarts import (
     encode_echarts_option,
 )
 from .template import HTML_TEMPLATE
-from .translations import KEYWORD_TRANSLATIONS, translate_chart_label, translate_smart
+from .translations import display_chart_label, translate_chart_label
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,7 @@ class ReportDataBundle:
     context_index_json: str
     report_stats: dict
     insights: list[dict]
+    chart_insights: dict[str, list[dict]]
     top_pairs: list[dict]
     refactor_stats: dict
 
@@ -144,12 +145,130 @@ def build_top_keyword_pairs(results: list[dict], limit: int = 5) -> list[dict]:
         pair_counts[tuple(sorted([a, b]))] += 1
     return [
         {
-            "pair": f"{translate_chart_label(a)} / {translate_chart_label(b)}",
-            "translated": "Top co-occurring disclosure terms",
+            "pair": f"{display_chart_label(a)} / {display_chart_label(b)}",
+            "full_pair": f"{translate_chart_label(a)} / {translate_chart_label(b)}",
+            "translated": _describe_keyword_pair(a, b, count),
             "count": _fmt_int(count),
         }
         for (a, b), count in pair_counts.most_common(limit)
     ]
+
+
+def _describe_keyword_pair(keyword_a: str, keyword_b: str, count: int) -> str:
+    """Write a compact interpretation for a ranked keyword pair."""
+    a = translate_chart_label(keyword_a)
+    b = translate_chart_label(keyword_b)
+    joined = f"{a} {b}".lower()
+    if any(term in joined for term in ("penalty", "fine", "law", "regulation", "standard", "compliance")):
+        signal = "compliance and regulatory pressure"
+    elif any(term in joined for term in ("energy", "carbon", "emission", "renewable", "low-carbon")):
+        signal = "transition and decarbonization activity"
+    elif any(term in joined for term in ("cost", "price", "market", "finance", "subsidy", "volatility")):
+        signal = "market and financial exposure"
+    elif any(term in joined for term in ("risk", "pressure", "challenge", "loss", "shortage")):
+        signal = "risk language in management discussion"
+    else:
+        signal = "recurring climate-disclosure language"
+    return f"{_fmt_int(count)} records link this pair as {signal}."
+
+
+def build_chart_insights(results: list[dict], top_pairs: list[dict]) -> dict[str, list[dict]]:
+    """Create fixed, reader-facing insight callouts for the main charts."""
+    tcfd = _tcfd_results(results)
+    year_counts: Counter = Counter(r.get("_year") for r in tcfd if r.get("_year"))
+    dim_counts: Counter = Counter(r.get("dimension") or "N/A" for r in tcfd)
+    total = len(tcfd)
+    first_year = min(year_counts) if year_counts else None
+    last_year = max(year_counts) if year_counts else None
+    recent_total = 0
+    if last_year:
+        recent_total = sum(year_counts[y] for y in range(last_year - 4, last_year + 1))
+    policy = dim_counts.get("政策", 0)
+    market = dim_counts.get("市场", 0)
+    tech = dim_counts.get("技术", 0)
+    top_pair = top_pairs[0]["full_pair"] if top_pairs else "the highest-frequency term pair"
+
+    trend_detail = (
+        f"The latest five years contain {_pct(recent_total, total)} of detected disclosures."
+        if total else "The trend view summarizes disclosures across the available years."
+    )
+    if first_year and last_year:
+        trend_detail = (
+            f"Detected disclosures rise from {_fmt_int(year_counts[first_year])} in "
+            f"{first_year} to {_fmt_int(year_counts[last_year])} in {last_year}. "
+            f"{trend_detail}"
+        )
+
+    return {
+        "sunburst": [
+            {
+                "label": "Dominant layer",
+                "value": "Policy-first",
+                "detail": (
+                    f"Policy language contributes {_fmt_int(policy)} disclosures, "
+                    "making compliance the clearest entry point into the taxonomy."
+                ),
+            },
+            {
+                "label": "Transition layer",
+                "value": _fmt_int(tech),
+                "detail": "Technology terms cluster around efficiency, energy substitution, and operational retrofit.",
+            },
+            {
+                "label": "Market layer",
+                "value": _fmt_int(market),
+                "detail": "Market signals are smaller but connect risk language to price, finance, and volatility.",
+            },
+        ],
+        "streamgraph": [
+            {
+                "label": "Temporal signature",
+                "value": "Post-2020 surge",
+                "detail": trend_detail,
+            },
+            {
+                "label": "Dimension balance",
+                "value": "Policy / Tech / Market",
+                "detail": (
+                    f"{_fmt_int(policy)} policy, {_fmt_int(tech)} technology, "
+                    f"and {_fmt_int(market)} market disclosures are visible in the evaluated set."
+                ),
+            },
+        ],
+        "network": [
+            {
+                "label": "Core pair",
+                "value": top_pair,
+                "detail": "The most repeated co-occurrence anchors the recent disclosure vocabulary.",
+            },
+            {
+                "label": "How to read it",
+                "value": "Dense center, specific edges",
+                "detail": "Large nodes are recurring terms; edges show which concepts companies discuss together.",
+            },
+        ],
+    }
+
+
+def _build_anonymized_evidence_summary(record: dict, year: int, context: str) -> str:
+    """Summarize evidence without publishing raw Chinese report text."""
+    keyword_a = translate_chart_label(record.get("keyword_a", ""))
+    keyword_b = translate_chart_label(record.get("keyword_b", ""))
+    dimension = translate_chart_label(record.get("dimension", ""))
+    context_size = len(context)
+    if dimension == "Policy":
+        frame = "a compliance or regulatory disclosure signal"
+    elif dimension == "Market":
+        frame = "a market-exposure disclosure signal"
+    elif dimension == "Technology":
+        frame = "a transition-technology disclosure signal"
+    else:
+        frame = "a climate-disclosure signal"
+    return (
+        f"An anonymized {year} filing links {keyword_a} with {keyword_b} as "
+        f"{frame}. The public case file withholds the original excerpt; "
+        f"the local pipeline evaluated a {context_size}-character source passage."
+    )
 
 
 def _dataclass_default(obj):
@@ -195,12 +314,8 @@ def build_context_index(eval_dir: Path, years: list[int]) -> dict:
                     continue
                 entry = {
                     "id": f"{year}-sample-{line_no}",
-                    "original": "Original Chinese annual-report excerpt withheld in this public English view.",
-                    "translated": (
-                        f"Evidence sample from {year}: "
-                        f"{translate_chart_label(r.get('keyword_a', ''))} / "
-                        f"{translate_chart_label(r.get('keyword_b', ''))}."
-                    ),
+                    "original": "Original excerpt withheld for the public portfolio view.",
+                    "translated": _build_anonymized_evidence_summary(r, year, ctx),
                     "source": "Anonymized annual report",
                     "year": year,
                     "dimension": translate_chart_label(r.get("dimension", "")),
@@ -208,7 +323,10 @@ def build_context_index(eval_dir: Path, years: list[int]) -> dict:
                 # 关键词索引 (供 network 节点 click)
                 for kw in (r.get("keyword_a", ""), r.get("keyword_b", "")):
                     if kw:
-                        index["keywords"].setdefault(translate_chart_label(kw), []).append(entry)
+                        full_label = translate_chart_label(kw)
+                        labels = {full_label, display_chart_label(kw)}
+                        for label in labels:
+                            index["keywords"].setdefault(label, []).append(entry)
                 # Sankey 边索引 (供 sankey 流道 click)
                 ka = r.get("keyword_a", "")
                 kb = r.get("keyword_b", "")
@@ -303,6 +421,8 @@ def build_report_data_bundle(
     context_index = build_context_index(eval_dir=eval_dir, years=network_years)
     all_results = load_all_results(eval_dir)
 
+    top_pairs = build_top_keyword_pairs(all_results)
+
     return ReportDataBundle(
         sunburst_json=_json.dumps(sunburst_opt, ensure_ascii=False),
         streamgraph_json=_json.dumps(streamgraph_opt, ensure_ascii=False),
@@ -318,7 +438,8 @@ def build_report_data_bundle(
         context_index_json=_json.dumps(context_index, ensure_ascii=False),
         report_stats=_build_report_stats(eval_dir, refactor_stats, all_results),
         insights=build_portfolio_insights(all_results),
-        top_pairs=build_top_keyword_pairs(all_results),
+        chart_insights=build_chart_insights(all_results, top_pairs),
+        top_pairs=top_pairs,
         refactor_stats=refactor_stats or {},
     )
 
@@ -359,6 +480,7 @@ def assemble_html(
         refactor_stats=data_bundle.refactor_stats,
         report_stats=data_bundle.report_stats,
         insights=data_bundle.insights,
+        chart_insights=data_bundle.chart_insights,
         top_pairs=data_bundle.top_pairs,
         build_date=build_date or date.today().isoformat(),
         # Stage 2 注入

@@ -315,6 +315,43 @@ _NON_ALNUM_RE = re.compile(r"[^\w\s]+", re.UNICODE)
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _ASCII_LABEL_RE = re.compile(r"[^A-Za-z0-9+&/ .-]+")
 
+DISPLAY_LABEL_OVERRIDES: dict[str, str] = {
+    "Industrial Enterprise Boundary Environmental Noise Emission Standard": "Boundary Noise Standard",
+    "Law On Prevention And Control Of Air Pollution": "Air Pollution Law",
+    "Energy Saving And Carbon Reduction Retrofit": "Energy & Carbon Retrofit",
+    "Energy Saving And Carbon Reduction": "Energy & Carbon Reduction",
+    "Energy Saving And Efficiency Improvement": "Energy Efficiency Upgrade",
+    "Energy Conservation And Environmental Protection": "Energy & Environmental Protection",
+    "Environmental Protection Administrative License": "Environmental Permit",
+    "Environmental Protection Laws and Regulations": "Environmental Regulations",
+    "Environmental Policy Restrictions": "Environmental Restrictions",
+    "Pollution Reduction And Carbon Reduction": "Pollution & Carbon Reduction",
+    "Improve Energy Utilization Efficiency": "Energy Utilization Efficiency",
+    "Standard Upgrade Retrofit": "Standards Upgrade",
+    "Outdated And Inefficient Capacity": "Outdated Capacity",
+    "Rectification Within Time Limit": "Timed Rectification",
+    "Pollution Prevention And Control": "Pollution Control",
+    "New Quality Productive Forces": "New Productive Forces",
+    "High-Temperature Power Rationing": "Power Rationing",
+    "Hazardous Waste Storage Pollution Control Standard": "Hazardous Waste Standard",
+    "Solid Waste Pollution Prevention Law": "Solid Waste Law",
+    "Safety And Environmental Protection": "Safety & Environment",
+    "Energy Saving Technical Transformation": "Energy-Saving Retrofit",
+    "Energy Saving Technical Retrofit": "Energy-Saving Retrofit",
+    "Energy Saving Retrofit": "Energy Retrofit",
+    "Carbon Emission Reduction": "Carbon Reduction",
+    "Carbon Emission Management": "Carbon Management",
+    "Carbon Emission Allowance": "Carbon Allowance",
+    "Carbon Emission Rights Pledged Financing": "Carbon Rights Financing",
+    "Carbon Emission Trading Market": "Carbon Trading Market",
+    "Environmental Impact Assessment": "Environmental Assessment",
+    "Environmental Impact Assessment 2": "Environmental Assessment 2",
+    "Pollutant Emission Standards": "Pollutant Standards",
+    "Environmental Compliance": "Compliance",
+    "Ecological Environmental Protection": "Eco-Environmental Protection",
+    "Energy Saving & Emission Reduction": "Energy Saving & Emission",
+}
+
 
 def has_cjk(value: str) -> bool:
     return bool(_CJK_RE.search(value or ""))
@@ -358,3 +395,26 @@ def translate_chart_label(label: str) -> str:
     if has_cjk(translated):
         return ascii_fallback(label)
     return translated
+
+
+def display_chart_label(label: str, max_words: int = 4, max_chars: int = 30) -> str:
+    """Return a compact display label while preserving the full label elsewhere.
+
+    The report keeps full translations in tooltips and side panels, but dense
+    charts need shorter on-canvas labels.  This function is deterministic and
+    English-only so generated HTML remains public-safe.
+    """
+    full = translate_chart_label(label)
+    if full in DISPLAY_LABEL_OVERRIDES:
+        return DISPLAY_LABEL_OVERRIDES[full]
+    if len(full) <= max_chars:
+        return full
+
+    words = full.split()
+    if len(words) <= max_words:
+        return full[:max_chars].rstrip(" -/")
+
+    compact = " ".join(words[:max_words])
+    if len(compact) > max_chars:
+        compact = compact[:max_chars].rstrip(" -/")
+    return compact

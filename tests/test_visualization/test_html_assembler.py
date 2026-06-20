@@ -260,8 +260,11 @@ class TestPortfolioInsights:
         ]
         pairs = build_top_keyword_pairs(records, limit=2)
         assert pairs[0]["pair"] == "Environmental Protection / Risk"
+        assert pairs[0]["full_pair"] == "Environmental Protection / Risk"
         assert pairs[0]["count"] == "2"
-        assert pairs[0]["translated"] == "Top co-occurring disclosure terms"
+        assert pairs[0]["translated"] == (
+            "2 records link this pair as risk language in management discussion."
+        )
 
 
 class TestContextInjection:

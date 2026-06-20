@@ -275,6 +275,40 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       font-size: 0.92rem;
       margin: 0;
     }
+    .chart-insight-rail {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin: 1rem 0 1rem;
+    }
+    .chart-insight {
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.018);
+      padding: 0.85rem 0.95rem;
+      min-width: 0;
+    }
+    .chart-insight .label {
+      margin: 0 0 0.35rem;
+      color: var(--accent-3);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .chart-insight .value {
+      margin: 0 0 0.35rem;
+      color: var(--fg);
+      font-weight: 700;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .chart-insight .detail {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
     .evidence-list {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -474,11 +508,13 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     @media (max-width: 700px) {
       .kpi-row { grid-template-columns: repeat(2, 1fr); }
       .insight-grid { grid-template-columns: 1fr; }
+      .chart-insight-rail { grid-template-columns: 1fr; }
       .evidence-list { grid-template-columns: 1fr; }
       header h1 { font-size: 2rem; }
     }
     @media (min-width: 701px) and (max-width: 1000px) {
       .insight-grid { grid-template-columns: 1fr; }
+      .chart-insight-rail { grid-template-columns: 1fr; }
       .evidence-list { grid-template-columns: repeat(2, 1fr); }
     }
     /* Side panel slide transitions (Alpine x-transition) */
@@ -668,6 +704,15 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
         semantic cluster → individual keyword. It is a compact view of the
         topic space discovered by the pipeline.
       </p>
+      <div class="chart-insight-rail" aria-label="Sunburst reading notes">
+        {% for insight in chart_insights.get("sunburst", []) %}
+        <article class="chart-insight">
+          <p class="label">{{ insight.label }}</p>
+          <p class="value">{{ insight.value }}</p>
+          <p class="detail">{{ insight.detail }}</p>
+        </article>
+        {% endfor %}
+      </div>
       <div class="chart-frame">
         <div id="echarts-sunburst" class="echarts-chart" style="width:100%; height:520px;"></div>
       </div>
@@ -748,6 +793,15 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       <div class="chart-frame">
         <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:520px;"></div>
       </div>
+      <div class="chart-insight-rail" aria-label="Trend reading notes">
+        {% for insight in chart_insights.get("streamgraph", []) %}
+        <article class="chart-insight">
+          <p class="label">{{ insight.label }}</p>
+          <p class="value">{{ insight.value }}</p>
+          <p class="detail">{{ insight.detail }}</p>
+        </article>
+        {% endfor %}
+      </div>
 
       <h3 style="margin-top: 2rem;">Recent language graph</h3>
       <p class="lede">
@@ -766,6 +820,15 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
         {% endfor %}
       </div>
       <p>Drag nodes, hover for counts, and click a node to inspect source context samples.</p>
+      <div class="chart-insight-rail" aria-label="Network reading notes">
+        {% for insight in chart_insights.get("network", []) %}
+        <article class="chart-insight">
+          <p class="label">{{ insight.label }}</p>
+          <p class="value">{{ insight.value }}</p>
+          <p class="detail">{{ insight.detail }}</p>
+        </article>
+        {% endfor %}
+      </div>
       <div class="chart-frame">
         <div id="echarts-network" class="echarts-chart" style="width:100%; height:600px;"></div>
       </div>
@@ -926,10 +989,13 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       chart.on('click', function(params) {
         if (chartId === 'echarts-network' && params.dataType === 'node') {
           const kw = params.data.name;
-          const contexts = _contextsFor(kw, 'keywords');
+          const fullLabel = params.data.fullLabel || kw;
+          const contexts = _contextsFor(fullLabel, 'keywords').length
+            ? _contextsFor(fullLabel, 'keywords')
+            : _contextsFor(kw, 'keywords');
           window.Alpine.store('hrApp').openPanel({
             type: 'node',
-            title: window.__hrTranslate(kw),
+            title: window.__hrTranslate(fullLabel),
             dimension: window.__hrTranslate(params.data.category || ''),
             contexts: contexts,
           });
