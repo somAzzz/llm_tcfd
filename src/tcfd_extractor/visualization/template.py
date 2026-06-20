@@ -8,7 +8,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TCFD Project Demo — Climate Disclosure Analysis</title>
+  <title>Climate Risk Intelligence — A-share Disclosure Analysis</title>
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%231f77b4'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>T</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -38,7 +38,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       --muted: #8b95a1;
       --accent: #58a6ff;
       --accent-fg: #ffffff;
-      --header-bg: linear-gradient(135deg, #1f3a5f 0%, #1a4d2e 100%);
+      --header-bg: #101923;
       --kpi-number-color: #58a6ff;
       --aside-bg: #1a1f24;
       --aside-border: #2a2f34;
@@ -52,7 +52,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       --muted: #666;
       --accent: #1f77b4;
       --accent-fg: #ffffff;
-      --header-bg: linear-gradient(135deg, #1f77b4 0%, #2ca02c 100%);
+      --header-bg: #f2f6fb;
       --kpi-number-color: #1f77b4;
       --aside-bg: #ffffff;
       --aside-border: #e0e0e0;
@@ -73,13 +73,43 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
     header {
       background: var(--header-bg);
-      color: white;
-      padding: 2rem 1.5rem;
-      text-align: center;
+      color: var(--fg);
+      padding: 3rem 1.5rem 2.25rem;
+      text-align: left;
       position: relative;
+      border-bottom: 1px solid var(--card-border);
     }
-    header h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; font-weight: 700; }
-    header .subtitle { opacity: 0.9; font-size: 1.05rem; }
+    .hero-inner { max-width: 1100px; margin: 0 auto; }
+    .hero-kicker {
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      margin: 0 0 0.75rem;
+    }
+    header h1 {
+      margin: 0 0 0.75rem 0;
+      font-size: 2.45rem;
+      line-height: 1.08;
+      font-weight: 700;
+      max-width: 860px;
+    }
+    header .subtitle {
+      color: var(--muted);
+      font-size: 1.08rem;
+      max-width: 760px;
+      margin: 0;
+    }
+    .hero-finding {
+      margin-top: 1.25rem;
+      padding: 1rem 1.1rem;
+      border-left: 4px solid var(--accent);
+      background: rgba(88, 166, 255, 0.08);
+      border-radius: 4px;
+      max-width: 860px;
+      color: var(--fg);
+    }
     .hr-theme-toggle {
       position: absolute;
       top: 1rem;
@@ -116,6 +146,70 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
       font-size: 0.85rem;
       color: var(--muted);
       margin-top: 0.5rem;
+    }
+    .insight-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin: 0 0 1.5rem;
+    }
+    .insight-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 1.1rem;
+    }
+    .insight-card .label {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin: 0 0 0.45rem;
+    }
+    .insight-card .value {
+      color: var(--accent);
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin: 0 0 0.55rem;
+    }
+    .insight-card .detail {
+      color: var(--fg);
+      font-size: 0.92rem;
+      margin: 0;
+    }
+    .evidence-list {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.75rem;
+      margin: 1rem 0 1.25rem;
+    }
+    .evidence-item {
+      border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 6px;
+      padding: 0.85rem;
+      min-height: 108px;
+    }
+    .evidence-item .rank {
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin-bottom: 0.35rem;
+    }
+    .evidence-item .pair {
+      font-weight: 700;
+      color: var(--fg);
+      line-height: 1.35;
+    }
+    .evidence-item .translated {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 0.3rem;
+    }
+    .evidence-item .count {
+      color: var(--accent);
+      font-weight: 700;
+      margin-top: 0.45rem;
+      font-size: 0.9rem;
     }
     section {
       background: var(--card-bg);
@@ -168,6 +262,13 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     }
     @media (max-width: 700px) {
       .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .insight-grid { grid-template-columns: 1fr; }
+      .evidence-list { grid-template-columns: 1fr; }
+      header h1 { font-size: 2rem; }
+    }
+    @media (min-width: 701px) and (max-width: 1000px) {
+      .insight-grid { grid-template-columns: 1fr; }
+      .evidence-list { grid-template-columns: repeat(2, 1fr); }
     }
     /* Side panel slide transitions (Alpine x-transition) */
     .hr-slide-in {
@@ -242,8 +343,18 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
   </button>
 
   <header>
-    <h1>TCFD Project Demo</h1>
-    <p class="subtitle">A production NLP system for climate-related financial disclosure analysis</p>
+    <div class="hero-inner">
+      <p class="hero-kicker">Portfolio Project · NLP · Climate Finance · Data Engineering</p>
+      <h1>Climate Risk Intelligence from {{ report_stats.get("companies", "0") }} Chinese Annual Reports</h1>
+      <p class="subtitle">
+        A 25-year NLP system that extracts, evaluates, clusters, and visualizes
+        TCFD-related disclosure signals across policy, market, and technology dimensions.
+      </p>
+      <div class="hero-finding">
+        Key finding: climate-related disclosure in A-share annual reports accelerated sharply
+        after 2020, with policy compliance still dominant and technology-transition signals rising.
+      </div>
+    </div>
   </header>
 
   <div class="container">
@@ -253,12 +364,12 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
         <p class="label">Companies Analyzed</p>
       </div>
       <div class="kpi-card">
-        <p class="number">{{ report_stats.get("disclosures", "0") }}</p>
-        <p class="label">TCFD Disclosures Detected</p>
+        <p class="number">{{ report_stats.get("records", "0") }}</p>
+        <p class="label">LLM Evaluations</p>
       </div>
       <div class="kpi-card">
-        <p class="number">{{ report_stats.get("year_range", "N/A") }}</p>
-        <p class="label">Years Covered</p>
+        <p class="number">{{ report_stats.get("disclosures", "0") }}</p>
+        <p class="label">TCFD Disclosures</p>
       </div>
       <div class="kpi-card">
         <p class="number">{{ report_stats.get("test_count", "0") }} tests passing</p>
@@ -267,13 +378,26 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     </div>
 
     <section>
-      <h2>1. What is this project about?</h2>
+      <h2>1. Climate disclosure signals at scale</h2>
       <p>
-        This system reads <strong>annual reports from A-share listed companies</strong> and
-        identifies <strong>TCFD (climate-related financial disclosure)</strong> content
-        across three dimensions: <em>Policy</em>, <em>Market</em>, <em>Technology</em>.
+        This project turns annual-report text into a structured map of climate-risk language.
+        It combines local LLM extraction, co-occurrence analysis, TCFD relevance evaluation,
+        semantic clustering, and a public-safe interactive report.
       </p>
-      <p>Three-dimensional clustering hierarchy (Sunburst) — click a node to drill down to keywords.</p>
+      <div class="insight-grid">
+        {% for insight in insights %}
+        <article class="insight-card">
+          <p class="label">{{ insight.label }}</p>
+          <p class="value">{{ insight.value }}</p>
+          <p class="detail">{{ insight.detail }}</p>
+        </article>
+        {% endfor %}
+      </div>
+      <p>
+        The sunburst below shows the vocabulary hierarchy: TCFD dimension →
+        semantic cluster → individual keyword. It is a compact view of the
+        topic space discovered by the pipeline.
+      </p>
       <div id="echarts-sunburst" class="echarts-chart" style="width:100%; height:520px;"></div>
     </section>
 
@@ -309,26 +433,41 @@ flowchart LR
     </section>
 
     <section>
-      <h2>3. What we discovered</h2>
+      <h2>3. What the data shows</h2>
       <p>
-        Below: 25 years (2000-2024) of three-dimensional disclosure evolution (Streamgraph) —
-        drag the bottom slider to zoom into a time range.
+        The strongest story is temporal: climate-related disclosures were sparse in
+        the early 2000s and surged in the 2020s. The streamgraph lets you compare
+        how policy, market, and technology signals evolved over time.
       </p>
       <div id="echarts-streamgraph" class="echarts-chart" style="width:100%; height:520px;"></div>
 
       <h3 style="margin-top: 2rem;">Keyword Co-occurrence Network (Recent 3 Years)</h3>
-      <p>Draggable nodes, hover to see co-occurrence count, click a node to view original context.</p>
+      <p>
+        The most frequent co-occurrences reveal the language behind the trend.
+        Compliance pressure, energy reduction, and transition technology dominate
+        the recent disclosure graph.
+      </p>
+      <div class="evidence-list">
+        {% for item in top_pairs %}
+        <article class="evidence-item">
+          <div class="rank">#{{ loop.index }}</div>
+          <div class="pair">{{ item.pair }}</div>
+          <div class="translated">{{ item.translated }}</div>
+          <div class="count">{{ item.count }} mentions</div>
+        </article>
+        {% endfor %}
+      </div>
+      <p>Explore the network directly: drag nodes, hover for counts, and click a node to inspect source context samples.</p>
       <div id="echarts-network" class="echarts-chart" style="width:100%; height:600px;"></div>
 
       <h3 style="margin-top: 2rem;">NLP Pipeline Data Refinement (Sankey)</h3>
-      <p>10,814 reports → chunking → disclosure → by dimension. Click a link to view context.</p>
+      <p>{{ report_stats.get("companies", "0") }} reports → chunking → disclosure → by dimension. Click a link to view context.</p>
       <div id="echarts-sankey" class="echarts-chart" style="width:100%; height:480px;"></div>
     </section>
 
     <section class="engineering-excellence">
       <h2>4. Robust AI Pipeline Engineering</h2>
-      <p class="subtitle">How we transformed a volatile LLM script into a
-         fault-tolerant, industry-grade text processing mill.</p>
+      <p class="subtitle">How the project turns noisy LLM output into reproducible analysis artifacts.</p>
 
       <div class="engineering-layout-grid">
         <div id="echarts-pipeline-health-dashboard"
@@ -338,29 +477,23 @@ flowchart LR
         <div class="engineering-specs">
           <div class="spec-card">
             <h3>&#x1F6E1;&#xFE0F; Stochastic-to-Deterministic Defense</h3>
-            <p>Deploying a local 35B model presents non-deterministic JSON
-               deformations. We implemented a Pydantic-driven validation
-               guardrail featuring a strict exception hierarchy
-               (<code>LLMResponseParseError</code>) and automatic
-               token-rate-limiting. Raw responses are safely isolated and logged
-               without halting the entire multi-year batch run.</p>
+            <p>A local 35B model can return malformed JSON or partial schema
+               matches. The evaluator wraps every response in Pydantic validation,
+               explicit parse exceptions, raw-response logging, and retry-aware
+               batch execution.</p>
           </div>
           <div class="spec-card">
             <h3>&#x26A1;&#xFE0F; Memory-Safe Streaming &amp; Concurrency</h3>
-            <p>Processing 10,814 files sequentially triggers tight coupling and
-               out-of-memory stalls. The refactored pipeline decouples
-               orchestration into 8 single-responsibility submodules, shifting
-               to a generator-based stream architecture. Controlled by a
-               <code>ThreadPoolExecutor</code> semaphore, the pipeline achieved
-               zero-leak concurrency across 25 years of financial reports.</p>
+            <p>Large JSONL outputs are loaded and aggregated with streaming
+               readers. Concurrent evaluation is handled with
+               <code>ThreadPoolExecutor</code>, bounded workers, and resumable
+               per-year output files.</p>
           </div>
           <div class="spec-card">
             <h3>&#x1F52C; Comprehensive Observability</h3>
-            <p>To eliminate regressions caused by LLM prompt tuning, we expanded
-               the test suite from 16 baseline specs to
-               <strong>329+ automated tests</strong>. New evaluation submodules
-               maintain a 95%&ndash;100% coverage rate, wrapping the entire AI
-               infrastructure in a transparent, highly verifiable test harness.</p>
+            <p>The current suite has <strong>{{ report_stats.get("test_count", "0") }} automated tests</strong>.
+               The public report is rebuilt from source data and checked with a
+               leakage scanner before publication.</p>
           </div>
         </div>
       </div>

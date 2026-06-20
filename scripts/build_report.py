@@ -131,20 +131,47 @@ def main() -> int:
     index_path.write_text(html, encoding="utf-8")
     print(f"Wrote {index_path} ({len(html):,} chars)")
 
-    readme = f"""# TCFD Project Demo
+    stats = data_bundle.report_stats
+    top_pairs_md = "\n".join(
+        f"- `{item['pair']}` ({item['translated']}) — {item['count']} mentions"
+        for item in data_bundle.top_pairs[:5]
+    )
+
+    readme = f"""# Climate Risk Intelligence from {stats.get('companies', '0')} Chinese Annual Reports
 
 **Live demo URL**: https://somAzzz.github.io/tcfd-report/
 
-## What's in this report
+## Project Snapshot
 
-A self-contained interactive HTML showcasing a production NLP system for
-climate-related financial disclosure (TCFD) analysis of A-share annual reports.
+This is a portfolio-ready NLP and data engineering project for climate-related
+financial disclosure analysis. It extracts, evaluates, clusters, and visualizes
+TCFD-related language from A-share annual reports across policy, market, and
+technology dimensions.
 
 Built on: {date.today().isoformat()}
 Report size: {len(html.encode('utf-8')) / 1024:.1f} KB
 Test count: {test_count_after} passing
 
-### Sections
+## Key Numbers
+
+- Companies analyzed: **{stats.get('companies', '0')}**
+- LLM evaluations: **{stats.get('records', '0')}**
+- TCFD-related disclosures: **{stats.get('disclosures', '0')}**
+- Year range: **{stats.get('year_range', 'N/A')}**
+
+## Key Finding
+
+Climate-related disclosure in A-share annual reports accelerated sharply after
+2020. Policy and compliance language remains the dominant signal, while
+technology-transition language rises strongly in recent years.
+
+## Evidence Highlights
+
+Top co-occurring keyword pairs:
+
+{top_pairs_md}
+
+## What's in the Report
 
 1. **Sunburst** — 3 dimensions (Policy / Market / Technology) → 83 clusters →
    individual keywords. Click any segment to drill down; click a keyword to
@@ -156,10 +183,8 @@ Test count: {test_count_after} passing
 4. **Sankey** — Keyword flow across the 4-stage pipeline (sampling →
    extraction → evaluation → aggregation). Click any flow to see source
    sentences.
-5. **AI Pipeline Resilience & Engineering Health** — 4-bar comparison of
-   the pre/post refactor metrics (memory footprint, concurrency, schema
-   compliance, test coverage). Click any bar to expand the live module
-   dependency graph of the evaluation subpackage.
+5. **AI Pipeline Resilience & Engineering Health** — engineering metrics and
+   a click-to-expand module dependency graph of the evaluation subpackage.
 
 All data is anonymized (company names are replaced with generic labels)
 and embedded in the HTML; runtime libraries are loaded from ECharts, Alpine,

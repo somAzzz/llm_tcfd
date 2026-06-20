@@ -76,10 +76,32 @@ class TestAssembleHtml:
             results_root=results,
             module_graph_svg="<svg></svg>",
         )
-        assert "What is this project" in html
+        assert "Climate Risk Intelligence" in html
+        assert "Climate disclosure signals at scale" in html
         assert "What we built" in html
-        assert "What we discovered" in html
+        assert "What the data shows" in html
         assert "Robust AI Pipeline Engineering" in html
+
+    def test_portfolio_insight_cards_included(self, tmp_path):
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            module_graph_svg="<svg></svg>",
+        )
+        assert "Portfolio Project" in html
+        assert "Disclosure acceleration" in html
+        assert "Policy-led signal" in html
+        assert "Engineering proof" in html
+
+    def test_top_keyword_pairs_panel_included(self, tmp_path):
+        results = _make_min_results(tmp_path)
+        html = assemble_html(
+            results_root=results,
+            module_graph_svg="<svg></svg>",
+        )
+        assert "evidence-list" in html
+        assert "低碳 / 碳交易" in html
+        assert "Low-Carbon / Carbon Trading" in html
 
     def test_charts_json_inlined(self, tmp_path):
         results = _make_min_results(tmp_path)
@@ -208,6 +230,40 @@ class TestBuildContextIndex:
         # is_tcfd_related=False 的 x/y 不进索引
         assert "x" not in index["keywords"]
         assert "y" not in index["keywords"]
+
+
+class TestPortfolioInsights:
+    def test_build_portfolio_insights_highlights_growth_and_dimensions(self):
+        from tcfd_extractor.visualization.html_assembler import build_portfolio_insights
+
+        records = [
+            {"_year": 2000, "is_tcfd_related": True, "dimension": "政策"},
+            {"_year": 2024, "is_tcfd_related": True, "dimension": "政策"},
+            {"_year": 2024, "is_tcfd_related": True, "dimension": "技术"},
+            {"_year": 2024, "is_tcfd_related": False, "dimension": "无"},
+        ]
+        insights = build_portfolio_insights(records)
+        assert [i["label"] for i in insights] == [
+            "Disclosure acceleration",
+            "Policy-led signal",
+            "Engineering proof",
+        ]
+        assert insights[0]["value"] == "1 -> 2"
+        assert insights[1]["value"] == "2"
+
+    def test_build_top_keyword_pairs_returns_translated_counts(self):
+        from tcfd_extractor.visualization.html_assembler import build_top_keyword_pairs
+
+        records = [
+            {"is_tcfd_related": True, "keyword_a": "环保", "keyword_b": "风险"},
+            {"is_tcfd_related": True, "keyword_a": "风险", "keyword_b": "环保"},
+            {"is_tcfd_related": True, "keyword_a": "碳交易", "keyword_b": "低碳"},
+            {"is_tcfd_related": False, "keyword_a": "x", "keyword_b": "y"},
+        ]
+        pairs = build_top_keyword_pairs(records, limit=2)
+        assert pairs[0]["pair"] == "环保 / 风险"
+        assert pairs[0]["count"] == "2"
+        assert "Environmental Protection" in pairs[0]["translated"]
 
 
 class TestContextInjection:

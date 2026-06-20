@@ -4,6 +4,7 @@ from __future__ import annotations
 import dataclasses
 import json as _json
 import logging
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -45,6 +46,8 @@ class ReportDataBundle:
     translate_map_json: str
     context_index_json: str
     report_stats: dict
+    insights: list[dict]
+    top_pairs: list[dict]
     refactor_stats: dict
 
 
@@ -53,9 +56,24 @@ def _fmt_int(value: int) -> str:
     return f"{value:,}"
 
 
-def _build_report_stats(results_root: Path, refactor_stats: dict | None) -> dict:
+def _pct(part: int, total: int) -> str:
+    """Format a percentage without noisy decimals."""
+    if total <= 0:
+        return "0%"
+    return f"{part / total:.0%}"
+
+
+def _tcfd_results(results: list[dict]) -> list[dict]:
+    return [r for r in results if r.get("is_tcfd_related")]
+
+
+def _build_report_stats(
+    results_root: Path,
+    refactor_stats: dict | None,
+    results: list[dict] | None = None,
+) -> dict:
     """Compute public-facing KPI values from loaded evaluation results."""
-    results = load_all_results(results_root)
+    results = results if results is not None else load_all_results(results_root)
     kpis = compute_kpis(results)
     years = years_with_data(results_root)
     year_range = f"{years[0]}-{years[-1]}" if years else "N/A"
@@ -63,9 +81,75 @@ def _build_report_stats(results_root: Path, refactor_stats: dict | None) -> dict
         "companies": _fmt_int(kpis.get("total_companies", 0)),
         "disclosures": _fmt_int(kpis.get("tcfd_count", 0)),
         "records": _fmt_int(kpis.get("total_records", 0)),
+        "years": _fmt_int(len(years)),
         "year_range": year_range,
         "test_count": _fmt_int((refactor_stats or {}).get("test_after", 0)),
     }
+
+
+def build_portfolio_insights(results: list[dict]) -> list[dict]:
+    """Build high-signal insight cards for the portfolio landing view."""
+    tcfd = _tcfd_results(results)
+    if not tcfd:
+        return []
+
+    year_counts: Counter = Counter(r.get("_year") for r in tcfd if r.get("_year"))
+    dim_counts: Counter = Counter(r.get("dimension") or "N/A" for r in tcfd)
+    first_year = min(year_counts) if year_counts else None
+    last_year = max(year_counts) if year_counts else None
+    recent_years = [y for y in range((last_year or 0) - 4, (last_year or 0) + 1)]
+    recent_total = sum(year_counts[y] for y in recent_years)
+    total = len(tcfd)
+    policy = dim_counts.get("政策", 0)
+    tech = dim_counts.get("技术", 0)
+    market = dim_counts.get("市场", 0)
+
+    insights = []
+    if first_year and last_year:
+        insights.append({
+            "label": "Disclosure acceleration",
+            "value": f"{_fmt_int(year_counts[first_year])} -> {_fmt_int(year_counts[last_year])}",
+            "detail": (
+                f"TCFD-related disclosures grew from {first_year} to {last_year}; "
+                f"the latest five years account for {_pct(recent_total, total)} of all detected disclosures."
+            ),
+        })
+    insights.append({
+        "label": "Policy-led signal",
+        "value": _fmt_int(policy),
+        "detail": (
+            "Policy and compliance language is the dominant disclosure pattern, "
+            f"while technology signals contribute {_fmt_int(tech)} mentions and market signals {_fmt_int(market)}."
+        ),
+    })
+    insights.append({
+        "label": "Engineering proof",
+        "value": "Local LLM + tests",
+        "detail": (
+            "The report is generated from a reproducible pipeline: streaming JSONL loading, "
+            "structured validation, leakage checks, and an automated test suite."
+        ),
+    })
+    return insights
+
+
+def build_top_keyword_pairs(results: list[dict], limit: int = 5) -> list[dict]:
+    """Return top co-occurring keyword pairs for a readable evidence panel."""
+    pair_counts: Counter = Counter()
+    for r in _tcfd_results(results):
+        a = (r.get("keyword_a") or "").strip()
+        b = (r.get("keyword_b") or "").strip()
+        if not a or not b:
+            continue
+        pair_counts[tuple(sorted([a, b]))] += 1
+    return [
+        {
+            "pair": f"{a} / {b}",
+            "translated": f"{translate_smart(a)} / {translate_smart(b)}",
+            "count": _fmt_int(count),
+        }
+        for (a, b), count in pair_counts.most_common(limit)
+    ]
 
 
 def _dataclass_default(obj):
@@ -213,6 +297,7 @@ def build_report_data_bundle(
         module_graph_opt = {"series": [{"type": "graph", "data": [], "links": []}]}
 
     context_index = build_context_index(eval_dir=eval_dir, years=network_years)
+    all_results = load_all_results(eval_dir)
 
     return ReportDataBundle(
         sunburst_json=_json.dumps(sunburst_opt, ensure_ascii=False),
@@ -227,7 +312,9 @@ def build_report_data_bundle(
         ),
         translate_map_json=_json.dumps(KEYWORD_TRANSLATIONS, ensure_ascii=False),
         context_index_json=_json.dumps(context_index, ensure_ascii=False),
-        report_stats=_build_report_stats(eval_dir, refactor_stats),
+        report_stats=_build_report_stats(eval_dir, refactor_stats, all_results),
+        insights=build_portfolio_insights(all_results),
+        top_pairs=build_top_keyword_pairs(all_results),
         refactor_stats=refactor_stats or {},
     )
 
@@ -267,6 +354,8 @@ def assemble_html(
         module_graph_json=data_bundle.module_graph_json,
         refactor_stats=data_bundle.refactor_stats,
         report_stats=data_bundle.report_stats,
+        insights=data_bundle.insights,
+        top_pairs=data_bundle.top_pairs,
         build_date=build_date or date.today().isoformat(),
         # Stage 2 注入
         translate_map_json=data_bundle.translate_map_json,
